@@ -1,10 +1,12 @@
 """API do CalcularSUS (Flask) - roda como função serverless na Vercel."""
+import os
+import sys
+
 from flask import Flask, jsonify, request
 
-try:  # execução na Vercel / pacote
-    from .dados import CATEGORIAS, FONTES, ITENS, PARAMETROS
-except ImportError:  # execução direta: python api/index.py
-    from dados import CATEGORIAS, FONTES, ITENS, PARAMETROS
+# Garante que "dados.py" (mesma pasta) seja importável na Vercel e localmente.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from dados import CATEGORIAS, FONTES, ITENS, PARAMETROS  # noqa: E402
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
