@@ -50,9 +50,9 @@ vercel --prod   # produção
 |------|-----------|
 | `GET /api/itens` | Lista categorias e itens |
 | `GET /api/parametros` | Premissas macro e fontes |
-| `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct`, `base` (`estimado` ou `sigtap`) |
-| `GET /api/cenarios` | Cenários prontos (uso leve, diabetes, gestação, hemodiálise, UTI, alto custo, HIV) |
-| `GET/POST /api/cesta` | Soma vários itens e compara com a contribuição anual |
+| `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct`, `base` (`estimado` ou `sigtap`), `anos` (1 a 60, padrão 1) |
+| `GET /api/cenarios` | Cenários prontos (uso leve, diabetes, gestação, gestação com cesárea, hemodiálise, UTI, alto custo, HIV) |
+| `GET/POST /api/cesta` | Soma vários itens e compara com a contribuição do período (`anos`) |
 
 Exemplos:
 
@@ -63,7 +63,9 @@ Exemplos:
 
 `POST /api/cesta` aceita JSON: `{"itens": [{"item_id": "uti_diaria", "quantidade": 10}], "renda_mensal": 3000}`.
 
-Itens cobrados por mês (ex.: medicamentos de uso contínuo) aceitam no máximo 12 por ano (`max_por_ano`).
+Itens cobrados por mês (ex.: medicamentos de uso contínuo) aceitam no máximo 12 por ano (`max_por_ano`), multiplicado pelos `anos` informados.
+
+`anos` = anos de contribuição. As quantidades passam a ser o **consumo total no período**, e a contribuição é `imposto_saude_anual × anos` (`imposto_saude_periodo`).
 
 ## Interface
 
@@ -78,7 +80,9 @@ Os cenários ficam em `api/dados.py` (`CENARIOS`) e são exemplos didáticos, n�
 - **Custo total** = custo do item × quantidade
 - **Impostos que você paga por ano** = renda mensal × 12 × carga tributária
 - **Parte que vai para a saúde** = impostos × % aplicado em saúde
-- **Cobertura** = parte da saúde ÷ custo total do uso
+- **Contribuição no período** = parte da saúde × anos de contribuição
+- **Cobertura** = contribuição no período ÷ custo total do uso
+  (exemplo: 5 anos com R$ 3.000/mês = R$ 6.998,40 para a saúde; uma cesárea estimada em R$ 2.000 é coberta 3,5x, e a gestação completa com cesárea, R$ 2.884,93, 2,4x)
 - **Renda de equilíbrio** (`renda_equilibrio_mensal`) = custo do uso ÷ (12 × carga tributária × % para saúde):
   a renda mensal em que a contribuição para a saúde iguala o consumo. Com as premissas
   padrão, o cenário "Uso leve" (2 consultas com especialista, 2 de dentista e 2 na UPA, custo de

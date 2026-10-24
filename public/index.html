@@ -59,6 +59,7 @@
   .punch { margin: 16px 0 0; padding: 14px 16px; border-left: 4px solid var(--brand);
            background: var(--soft); border-radius: 0 12px 12px 0; }
   .punch.alert { border-left-color: var(--accent); }
+  .punch.ok { border-left-color: #1a8f4c; background: #eaf7ef; font-weight: 600; }
   .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px;
            background: var(--warn-bg); color: var(--warn-ink); }
   .badge.ok { background: var(--soft); color: var(--brand); }
@@ -118,6 +119,10 @@
         <input id="renda" type="number" min="0" step="100" placeholder="ex.: 3000" inputmode="decimal">
       </div>
       <div>
+        <label for="anos">Anos de contribuição</label>
+        <input id="anos" type="number" min="1" max="60" step="1" value="1" inputmode="numeric">
+      </div>
+      <div>
         <label for="base">Base dos valores</label>
         <select id="base">
           <option value="estimado">Custo estimado para o sistema</option>
@@ -144,7 +149,7 @@
 
   <!-- Cesta do ano -->
   <section class="card" id="sec-cesta" aria-labelledby="t-cesta">
-    <h2 id="t-cesta">2. Cesta de consumo do ano</h2>
+    <h2 id="t-cesta">2. Cesta de consumo no período</h2>
     <p class="sub">Escolha um cenário pronto ou monte a sua cesta. Itens baratos isolados parecem pouco; o peso aparece no conjunto e nos eventos caros.</p>
     <div class="chips" id="chips" role="group" aria-label="Cenários prontos"></div>
     <p class="hint" id="cen-desc"></p>
@@ -167,7 +172,7 @@
         </div>
         <div id="c-renda" hidden>
           <div class="chart">
-            <h3>Sua contribuição para a saúde x custo do consumo (por ano)</h3>
+            <h3>Sua contribuição para a saúde x custo do consumo (no período)</h3>
             <div id="c-bars"></div>
           </div>
           <div class="stats" style="margin-top:12px">
@@ -216,7 +221,7 @@
       <p class="hint" id="r-fonte"></p>
       <div id="r-renda" hidden>
         <div class="chart">
-          <h3>Sua contribuição para a saúde x custo deste uso (por ano)</h3>
+          <h3>Sua contribuição para a saúde x custo deste uso (no período)</h3>
           <div id="r-bars"></div>
         </div>
         <p class="hint" id="r-bar-txt"></p>
@@ -277,14 +282,20 @@ function rotulo(unidade, n) {
   return PLURAL[unidade] || unidade + "s";
 }
 function pergunta(item) {
-  return item && item.unidade === "mês" ? "Quantos meses por ano? (máx. 12)" : "Quantas vezes por ano?";
+  return item && item.unidade === "mês" ? `Quantos meses no período? (máx. ${12 * Number(anosVal())})` : "Quantas vezes no período?";
 }
+function anosVal() {
+  const n = parseInt($("anos").value, 10);
+  return String(Number.isFinite(n) && n >= 1 ? Math.min(60, n) : 1);
+}
+function periodo(anos) { return anos > 1 ? `${anos} anos` : "1 ano"; }
 function dados() {
   return {
     renda_mensal: $("renda").value || "0",
     carga_pct: $("carga").value,
     parcela_saude_pct: $("parcela").value,
     base: $("base").value,
+    anos: anosVal(),
   };
 }
 
@@ -360,7 +371,7 @@ function desenharTabela() {
 function ajustarCampoQtd() {
   const it = porId($("item").value);
   $("qtd-l").textContent = pergunta(it);
-  const max = it && it.max_por_ano ? it.max_por_ano : "";
+  const max = it && it.max_por_ano ? it.max_por_ano * Number(anosVal()) : "";
   $("qtd").max = max;
   if (max && Number($("qtd").value) > max) $("qtd").value = max;
 }
@@ -411,18 +422,25 @@ function mostrarItem(r) {
   const temRenda = r.renda_anual > 0 && !r.sem_valor_base;
   $("r-renda").hidden = !temRenda;
   if (temRenda) {
-    barras($("r-bars"), r.imposto_saude_anual, r.custo_total);
+    barras($("r-bars"), r.imposto_saude_periodo, r.custo_total);
     const pct = r.cobertura_pct ?? 0;
+    const per = periodo(r.anos);
     $("r-bar-txt").textContent = pct >= 100
-      ? `Sua contribuição estimada para a saúde (${brl.format(r.imposto_saude_anual)}) cobre ${num.format(pct)}% deste uso. Para ver o peso do sistema, monte uma cesta com vários itens ou escolha um cenário.`
-      : `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% do custo deste uso. O restante é financiado por outros contribuintes.`;
+      ? `Em ${per}, sua contribuição estimada para a saúde (${brl.format(r.imposto_saude_periodo)}) cobre ${num.format(pct)}% deste uso. Para ver o peso do sistema, monte uma cesta com vários itens ou escolha um cenário.`
+      : `Em ${per}, sua contribuição estimada para a saúde cobre ${num.format(pct)}% do custo deste uso. O restante é financiado por outros contribuintes.`;
+    if (pct >= 100 && !r.sem_valor_base) {
+      $("r-punch").className = "punch";
+      $("r-punch").innerHTML = `Em <b>${per}</b>, a sua contribuição estimada para a saúde (<b>${brl.format(r.imposto_saude_periodo)}</b>) é <b>${num.format(pct / 100)}x</b> o custo deste uso (<b>${brl.format(r.custo_total)}</b>). Você já pagou mais em impostos do que o sistema gastou com isso.`;
+    } else {
+      $("r-punch").className = "punch";
+    }
   }
 }
 
 /* ---------- cesta ---------- */
 function adicionarItem(item_id, quantidade) {
   const it = porId(item_id);
-  const max = it && it.max_por_ano ? it.max_por_ano : 100000;
+  const max = it && it.max_por_ano ? it.max_por_ano * Number(anosVal()) : 100000;
   const existente = cesta.find((l) => l.item_id === item_id);
   if (existente) existente.quantidade = Math.min(max, existente.quantidade + quantidade);
   else cesta.push({ item_id, quantidade: Math.min(max, quantidade) });
@@ -471,7 +489,7 @@ function desenharLinhasCesta(r) {
   $("cesta-body").innerHTML = r.linhas.map((l, i) => `
     <tr>
       <td>${l.nome}<br><small style="color:var(--muted)">${rotulo(l.unidade, l.quantidade)}</small></td>
-      <td><input class="qtd-in" type="number" min="1" step="1" ${l.max_por_ano ? `max="${l.max_por_ano}"` : ""}
+      <td><input class="qtd-in" type="number" min="1" step="1" ${l.max_no_periodo ? `max="${l.max_no_periodo}"` : ""}
                  value="${l.quantidade}" data-i="${i}" aria-label="Quantidade de ${l.nome}"></td>
       <td class="num">${l.sem_valor_base ? "sem valor" : brl.format(l.custo)}</td>
       <td><button class="link" type="button" data-rm="${i}" aria-label="Remover ${l.nome}">remover</button></td>
@@ -479,7 +497,7 @@ function desenharLinhasCesta(r) {
 }
 
 function mostrarTotaisCesta(r) {
-  $("c-custo-l").textContent = r.base === "sigtap" ? "Valor da cesta na tabela SIGTAP" : "Custo estimado do consumo no ano";
+  $("c-custo-l").textContent = r.base === "sigtap" ? "Valor da cesta na tabela SIGTAP" : r.anos > 1 ? `Custo estimado do consumo em ${r.anos} anos` : "Custo estimado do consumo no ano";
   $("c-custo").textContent = brl.format(r.custo_total);
   const av = $("c-aviso");
   if (r.itens_sem_valor && r.itens_sem_valor.length) {
@@ -504,8 +522,9 @@ function mostrarTotaisCesta(r) {
     return;
   }
 
-  barras($("c-bars"), r.imposto_saude_anual, r.custo_total);
-  $("c-contrib").textContent = brl.format(r.imposto_saude_anual);
+  const per = periodo(r.anos);
+  barras($("c-bars"), r.imposto_saude_periodo, r.custo_total);
+  $("c-contrib").textContent = brl.format(r.imposto_saude_periodo);
   const falta = r.saldo < 0;
   const incompleta = r.itens_sem_valor && r.itens_sem_valor.length > 0;
   $("c-saldo-l").textContent = falta
@@ -526,7 +545,7 @@ function mostrarTotaisCesta(r) {
   const eq = $("c-equilibrio");
   if (r.renda_equilibrio_mensal && !incompleta) {
     eq.hidden = false;
-    eq.textContent = `Renda mensal em que a contribuição para a saúde iguala este consumo: ${brl.format(r.renda_equilibrio_mensal)} (com as premissas atuais). Acima disso, a pessoa contribui mais do que usa neste cenário.`;
+    eq.textContent = `Renda mensal em que a contribuição de ${per} para a saúde iguala este consumo: ${brl.format(r.renda_equilibrio_mensal)} (com as premissas atuais). Acima disso, a pessoa contribui mais do que usa neste cenário.`;
   } else {
     eq.hidden = true;
   }
@@ -534,13 +553,13 @@ function mostrarTotaisCesta(r) {
   const parcial = incompleta;
   if (falta) {
     punch.className = "punch alert";
-    punch.innerHTML = `${parcial ? "Mesmo sem contar os itens sem valor na tabela, e" : "E"}sse consumo custa ${parcial ? "ao menos " : ""}<b>${num.format(r.vezes_a_contribuicao)}x</b> o que a sua renda destina à saúde por ano. A diferença de <b>${brl.format(-r.saldo)}</b> é financiada por outros contribuintes: é assim que o SUS funciona como um fundo coletivo.`;
+    punch.innerHTML = `${parcial ? "Mesmo sem contar os itens sem valor na tabela, e" : "E"}sse consumo custa ${parcial ? "ao menos " : ""}<b>${num.format(r.vezes_a_contribuicao)}x</b> o que a sua renda destina à saúde em ${per}. A diferença de <b>${brl.format(-r.saldo)}</b> é financiada por outros contribuintes: é assim que o SUS funciona como um fundo coletivo.`;
   } else if (parcial) {
     punch.className = "punch";
     punch.innerHTML = `Com os itens que têm valor na tabela SIGTAP, a sua contribuição estimada cobriria o consumo, mas <b>${r.itens_sem_valor.length} item(ns) ficaram de fora</b>, então este resultado <b>não é conclusivo</b>. Veja o aviso abaixo.`;
   } else {
-    punch.className = "punch";
-    punch.innerHTML = `Neste cenário a sua contribuição estimada para a saúde (<b>${brl.format(r.imposto_saude_anual)}</b>) é <b>${num.format(vezes)}x</b> o custo do que você usou (<b>${brl.format(r.custo_total)}</b>). Sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas, como quem precisa de tratamentos caros.`;
+    punch.className = "punch ok";
+    punch.innerHTML = `Neste cenário, em <b>${per}</b>, a sua contribuição estimada para a saúde (<b>${brl.format(r.imposto_saude_periodo)}</b>) é <b>${num.format(vezes)}x</b> o custo do que você usou (<b>${brl.format(r.custo_total)}</b>). Sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas, como quem precisa de tratamentos caros.`;
   }
 }
 
@@ -556,7 +575,8 @@ async function init() {
   preencherSelect(); desenharChips(); desenharTabela(); ajustarCampoQtd(); calcularItem();
 
   const reagir = () => { clearTimeout(timerItem); timerItem = setTimeout(calcularItem, 250); agendarCesta(); };
-  ["renda", "carga", "parcela"].forEach((id) => $(id).addEventListener("input", reagir));
+  ["renda", "carga", "parcela", "anos"].forEach((id) => $(id).addEventListener("input", reagir));
+  $("anos").addEventListener("input", ajustarCampoQtd);
   $("base").addEventListener("change", () => { dicaBase(); reagir(); });
   $("qtd").addEventListener("input", () => {
     const max = Number($("qtd").max);

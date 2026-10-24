@@ -256,6 +256,18 @@ CENARIOS = [
         ],
     },
     {
+        "id": "gestante_cesarea",
+        "nome": "Gestação com cesárea",
+        "descricao": "Pré-natal, exames, ultrassons, vacinas e parto cesáreo com internação. Informe os anos de contribuição no passo 1.",
+        "itens": [
+            {"item_id": "consulta_basica", "quantidade": 7},
+            {"item_id": "hemograma", "quantidade": 3},
+            {"item_id": "ultrassom", "quantidade": 3},
+            {"item_id": "vacina", "quantidade": 2},
+            {"item_id": "cesarea", "quantidade": 1},
+        ],
+    },
+    {
         "id": "hemodialise",
         "nome": "Hemodiálise por 1 ano",
         "descricao": "Três sessões por semana (156 por ano) e acompanhamento com especialista.",

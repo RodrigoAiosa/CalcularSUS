@@ -47,11 +47,11 @@ def _valor_unitario(item, base):
     return item["valor_sigtap"] if base == "sigtap" else item["custo_sus"]
 
 
-def _validar_quantidade(item, quantidade):
-    """Aplica o limite anual do item (ex.: 12 meses para remédios mensais)."""
-    limite = item.get("max_por_ano", 100_000)
+def _validar_quantidade(item, quantidade, anos=1):
+    """Aplica o limite anual do item (ex.: 12 meses por ano para remédios mensais) vezes os anos."""
+    limite = item.get("max_por_ano", 100_000) * anos
     if quantidade > limite:
-        raise ValueError(f"{item['nome']}: máximo de {limite} por ano")
+        raise ValueError(f"{item['nome']}: máximo de {limite:g} no período de {anos:g} ano(s)")
     return quantidade
 
 
@@ -62,16 +62,18 @@ def _contribuicao(renda_mensal, carga_pct, parcela_saude_pct):
     return renda_anual, impostos_anuais, imposto_saude_anual
 
 
-def _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct):
-    """Renda mensal em que a contribuição para a saúde iguala o custo informado."""
-    fator = 12 * (carga_pct / 100) * (parcela_saude_pct / 100)
+def _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct, anos=1):
+    """Renda mensal em que a contribuição para a saúde (em `anos` anos) iguala o custo informado."""
+    fator = 12 * anos * (carga_pct / 100) * (parcela_saude_pct / 100)
     if fator <= 0 or custo_total <= 0:
         return None
     return round(custo_total / fator, 2)
 
 
-def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="estimado"):
-    """Soma o consumo de vários itens e compara com a contribuição anual."""
+def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="estimado", anos=1):
+    """Soma o consumo de vários itens e compara com a contribuição de `anos` anos.
+
+    As quantidades são o consumo TOTAL no período (não por ano)."""
     linhas = []
     sem_valor = []
     custo_total = 0.0
@@ -82,7 +84,7 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="
         item = _ITENS_POR_ID.get(entrada.get("item_id"))
         if item is None:
             raise ValueError(f"item_id inválido: {entrada.get('item_id')!r}")
-        qtd = _validar_quantidade(item, _numero(entrada.get("quantidade"), 1, 0, 100_000))
+        qtd = _validar_quantidade(item, _numero(entrada.get("quantidade"), 1, 0, 100_000), anos)
         unitario = _valor_unitario(item, base)
         if unitario is None:  # item sem valor nesta base: conta 0 e avisa
             sem_valor.append(item["nome"])
@@ -99,18 +101,21 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="
             "unidade": item["unidade"],
             "quantidade": qtd,
             "max_por_ano": item.get("max_por_ano"),
+            "max_no_periodo": item["max_por_ano"] * anos if item.get("max_por_ano") else None,
             "custo": round(custo, 2),
             "sem_valor_base": unitario is None,
             "valor_particular": round(particular, 2) if particular is not None else None,
         })
 
     renda_anual, impostos_anuais, imposto_saude = _contribuicao(renda_mensal, carga_pct, parcela_saude_pct)
+    imposto_saude_periodo = imposto_saude * anos
     tem_renda = imposto_saude > 0
-    saldo = imposto_saude - custo_total
+    saldo = imposto_saude_periodo - custo_total
 
     return {
         "linhas": linhas,
         "base": base,
+        "anos": anos,
         "itens_sem_valor": sem_valor,
         "custo_total": round(custo_total, 2),
         "valor_particular_total": round(particular_total, 2),
@@ -118,18 +123,20 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="
         "renda_anual": round(renda_anual, 2),
         "impostos_anuais": round(impostos_anuais, 2),
         "imposto_saude_anual": round(imposto_saude, 2),
+        "imposto_saude_periodo": round(imposto_saude_periodo, 2),
         "tem_renda": tem_renda,
-        # saldo > 0: contribuição cobre o consumo; saldo < 0: outros contribuintes cobrem a diferença
+        # saldo > 0: contribuição (no período) cobre o consumo; saldo < 0: outros contribuintes cobrem a diferença
         "saldo": round(saldo, 2),
-        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct),
-        "cobertura_pct": round(imposto_saude / custo_total * 100, 1) if custo_total and tem_renda else None,
-        "vezes_a_contribuicao": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
+        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct, anos),
+        "cobertura_pct": round(imposto_saude_periodo / custo_total * 100, 1) if custo_total and tem_renda else None,
+        "vezes_a_contribuicao": round(custo_total / imposto_saude_periodo, 1) if tem_renda and custo_total else None,
+        # anos de contribuição necessários para cobrir sozinho (independe do período informado)
         "anos_para_cobrir": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
         "premissas": {"carga_pct": carga_pct, "parcela_saude_pct": parcela_saude_pct},
     }
 
 
-def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base="estimado"):
+def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base="estimado", anos=1):
     unitario = _valor_unitario(item, base)
     sem_valor_base = unitario is None
     custo_unit = unitario or 0.0
@@ -142,8 +149,9 @@ def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base=
         renda_mensal, carga_pct, parcela_saude_pct
     )
 
+    imposto_saude_periodo = imposto_saude_anual * anos
     unidades_cobertas = imposto_saude_anual / custo_unit if custo_unit else None
-    cobertura_pct = (imposto_saude_anual / custo_total * 100) if custo_total else None
+    cobertura_pct = (imposto_saude_periodo / custo_total * 100) if custo_total else None
     economia = (particular_total - custo_total) if particular_total is not None else None
 
     return {
@@ -159,7 +167,10 @@ def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base=
         "renda_anual": round(renda_anual, 2),
         "impostos_anuais": round(impostos_anuais, 2),
         "imposto_saude_anual": round(imposto_saude_anual, 2),
-        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct),
+        "anos": anos,
+        "imposto_saude_periodo": round(imposto_saude_periodo, 2),
+        "vezes_a_contribuicao": round(custo_total / imposto_saude_periodo, 2) if imposto_saude_periodo and custo_total else None,
+        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct, anos),
         "unidades_cobertas_por_ano": round(unidades_cobertas, 2) if unidades_cobertas is not None else None,
         "cobertura_pct": round(cobertura_pct, 1) if cobertura_pct is not None else None,
         "premissas": {"carga_pct": carga_pct, "parcela_saude_pct": parcela_saude_pct},
@@ -191,8 +202,9 @@ def rota_calcular():
         return jsonify({"erro": "item_id inválido ou ausente"}), 400
 
     try:
+        anos = _numero(dados.get("anos"), 1, minimo=1, maximo=60)
         quantidade = _validar_quantidade(
-            item, _numero(dados.get("quantidade"), 1, minimo=0, maximo=100_000)
+            item, _numero(dados.get("quantidade"), 1, minimo=0, maximo=100_000), anos
         )
         renda = _numero(dados.get("renda_mensal"), 0, minimo=0, maximo=10_000_000)
         carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
@@ -201,7 +213,7 @@ def rota_calcular():
     except ValueError as e:
         return jsonify({"erro": str(e)}), 400
 
-    return jsonify(calcular(item, quantidade, renda, carga, parcela, base))
+    return jsonify(calcular(item, quantidade, renda, carga, parcela, base, anos))
 
 
 @app.get("/api/cenarios")
@@ -240,7 +252,8 @@ def rota_cesta():
         carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
         parcela = _numero(dados.get("parcela_saude_pct"), PARAMETROS["parcela_saude_pct"], 0, 100)
         base = _base(dados.get("base"))
-        return jsonify(calcular_cesta(brutos, renda, carga, parcela, base))
+        anos = _numero(dados.get("anos"), 1, minimo=1, maximo=60)
+        return jsonify(calcular_cesta(brutos, renda, carga, parcela, base, anos))
     except ValueError as e:
         return jsonify({"erro": str(e)}), 400
 
