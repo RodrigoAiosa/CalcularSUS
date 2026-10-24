@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CalcularSUS - quanto custa o SUS que é "de graça"?</title>
+<meta name="description" content="O SUS não cobra na porta, mas é pago por todos através dos impostos. Descubra quanto custa cada atendimento e medicamento.">
+<style>
+  :root {
+    --bg: #f4f7f5; --card: #ffffff; --ink: #14231c; --muted: #5b6b62;
+    --line: #dbe5df; --brand: #0b7a4b; --brand-ink: #ffffff;
+    --accent: #c2410c; --soft: #e7f3ec; --warn-bg: #fff6e5; --warn-ink: #7a4b00;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1511; --card: #16201a; --ink: #e8f1ec; --muted: #9bb0a5;
+      --line: #263329; --brand: #34c789; --brand-ink: #06231a;
+      --accent: #fb923c; --soft: #1b2a21; --warn-bg: #2b2412; --warn-ink: #f3d28a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px 48px; }
+  header { padding: 40px 0 24px; }
+  header h1 { margin: 0 0 8px; font-size: clamp(28px, 5vw, 42px); letter-spacing: -.02em; }
+  header h1 span { color: var(--brand); }
+  header p { margin: 0; color: var(--muted); max-width: 640px; font-size: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+          padding: 20px; margin-bottom: 20px; }
+  h2 { margin: 0 0 14px; font-size: 20px; }
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
+  select, input { width: 100%; padding: 10px 12px; font: inherit; color: var(--ink);
+          background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  select:focus, input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  .full { grid-column: 1 / -1; }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; color: var(--brand); font-weight: 600; }
+  .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  .result-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 14px; }
+  .result-head strong { font-size: 18px; }
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+  .stat { background: var(--soft); border-radius: 12px; padding: 14px; }
+  .stat small { display: block; color: var(--muted); font-size: 13px; }
+  .stat b { display: block; font-size: 26px; letter-spacing: -.02em; margin-top: 2px; }
+  .stat.zero b { color: var(--brand); }
+  .stat.cost b { color: var(--accent); }
+  .punch { margin: 16px 0 0; padding: 14px 16px; border-left: 4px solid var(--brand);
+           background: var(--soft); border-radius: 0 12px 12px 0; }
+  .bar { height: 12px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .bar > i { display: block; height: 100%; background: var(--brand); width: 0; transition: width .3s; }
+  .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px;
+           background: var(--warn-bg); color: var(--warn-ink); }
+  .badge.ok { background: var(--soft); color: var(--brand); }
+
+  .tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .tools input { flex: 1 1 220px; }
+  .tools select { flex: 0 1 240px; }
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td:first-child { white-space: normal; min-width: 220px; }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--soft); }
+  td.num, th.num { text-align: right; }
+
+  .aviso { background: var(--warn-bg); color: var(--warn-ink); border-radius: var(--radius);
+           padding: 14px 16px; font-size: 14px; }
+  ul.fontes { padding-left: 18px; margin: 8px 0 0; }
+  ul.fontes a { color: var(--brand); }
+  footer { color: var(--muted); font-size: 13px; text-align: center; margin-top: 28px; }
+  .err { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Calcular<span>SUS</span></h1>
+    <p>No SUS você não paga na porta. Mas a conta existe: ela é paga por todos os brasileiros, através dos impostos. Veja quanto custa cada atendimento e medicamento.</p>
+  </header>
+
+  <section class="card" aria-labelledby="t-calc">
+    <h2 id="t-calc">Calculadora</h2>
+    <div class="grid">
+      <div class="full">
+        <label for="item">Atendimento ou medicamento</label>
+        <select id="item"></select>
+      </div>
+      <div>
+        <label for="qtd">Quantas vezes por ano?</label>
+        <input id="qtd" type="number" min="0" step="1" value="1" inputmode="numeric">
+      </div>
+      <div>
+        <label for="renda">Sua renda mensal (R$) - opcional</label>
+        <input id="renda" type="number" min="0" step="100" placeholder="ex.: 3000" inputmode="decimal">
+      </div>
+    </div>
+    <details>
+      <summary>Ajustar premissas</summary>
+      <div class="grid" style="margin-top:12px">
+        <div>
+          <label for="carga">Carga tributária sobre sua renda (%)</label>
+          <input id="carga" type="number" min="0" max="100" step="0.1">
+        </div>
+        <div>
+          <label for="parcela">% dos impostos que vai para a saúde</label>
+          <input id="parcela" type="number" min="0" max="100" step="0.1">
+        </div>
+      </div>
+      <p class="hint">Padrões: carga de 32,4% do PIB em 2025 e ~12% dos tributos aplicados em saúde (estimativa). A carga real de cada pessoa varia conforme renda e consumo.</p>
+    </details>
+  </section>
+
+  <section class="card" id="resultado" aria-live="polite" hidden>
+    <div class="result-head">
+      <strong id="r-nome"></strong>
+      <span id="r-badge" class="badge"></span>
+    </div>
+    <div class="stats">
+      <div class="stat zero"><small>Você pagou na hora</small><b id="r-zero">R$ 0,00</b></div>
+      <div class="stat cost"><small id="r-custo-l">Custo real para o sistema</small><b id="r-custo"></b></div>
+      <div class="stat"><small>No particular custaria</small><b id="r-part"></b></div>
+    </div>
+    <p class="punch" id="r-punch"></p>
+    <div id="r-renda" hidden>
+      <div class="stats" style="margin-top:14px">
+        <div class="stat"><small>Impostos que você paga por ano (estimativa)</small><b id="r-imp"></b></div>
+        <div class="stat"><small>Parte que vai para a saúde por ano</small><b id="r-imp-saude"></b></div>
+        <div class="stat"><small>Isso paga quantas unidades por ano</small><b id="r-unid"></b></div>
+      </div>
+      <div class="bar" aria-hidden="true"><i id="r-bar"></i></div>
+      <p class="hint" id="r-bar-txt"></p>
+    </div>
+    <p class="err" id="r-err" hidden></p>
+  </section>
+
+  <section class="card">
+    <h2>Tabela de valores</h2>
+    <div class="tools">
+      <input id="busca" type="search" placeholder="Buscar (ex.: consulta, insulina, UTI)">
+      <select id="cat"></select>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Item</th><th class="num">Custo (SUS)</th><th class="num">Particular</th><th>Status</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="hint">Clique em uma linha para calcular.</p>
+  </section>
+
+  <section class="card">
+    <h2>Metodologia e fontes</h2>
+    <p>O custo por item é o valor de referência para o sistema público; o "particular" é o preço aproximado de mercado. A parte da sua renda que vira saúde é: <em>renda anual × carga tributária × % aplicado em saúde</em>. É uma estimativa educativa, não um extrato do que você realmente pagou.</p>
+    <p class="aviso"><b>Atenção:</b> os valores por item ainda são estimativas e precisam ser validados no SIGTAP e no Banco de Preços em Saúde antes de uso público.</p>
+    <ul class="fontes" id="fontes"></ul>
+  </section>
+
+  <footer>CalcularSUS - projeto independente, sem vínculo com o Ministério da Saúde.</footer>
+</div>
+
+<script>
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const num = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+const $ = (id) => document.getElementById(id);
+let ITENS = [], CATS = {}, timer;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.erro || "Erro na API");
+  return j;
+}
+
+function preencherSelect() {
+  const sel = $("item");
+  sel.innerHTML = "";
+  for (const [cid, nome] of Object.entries(CATS)) {
+    const g = document.createElement("optgroup");
+    g.label = nome;
+    ITENS.filter((i) => i.categoria === cid).forEach((i) => {
+      const o = new Option(i.nome, i.id);
+      g.appendChild(o);
+    });
+    sel.appendChild(g);
+  }
+  const cat = $("cat");
+  cat.innerHTML = '<option value="">Todas as categorias</option>' +
+    Object.entries(CATS).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+}
+
+function desenharTabela() {
+  const q = $("busca").value.trim().toLowerCase();
+  const c = $("cat").value;
+  const linhas = ITENS.filter((i) => (!c || i.categoria === c) && (!q || i.nome.toLowerCase().includes(q)));
+  $("tbody").innerHTML = linhas.map((i) => `
+    <tr data-id="${i.id}">
+      <td>${i.nome}<br><small style="color:var(--muted)">por ${i.unidade}</small></td>
+      <td class="num">${brl.format(i.custo_sus)}</td>
+      <td class="num">${i.valor_particular == null ? "-" : brl.format(i.valor_particular)}</td>
+      <td><span class="badge ${i.validado ? "ok" : ""}">${i.validado ? "validado" : "estimativa"}</span></td>
+    </tr>`).join("") || '<tr><td colspan="4">Nenhum item encontrado.</td></tr>';
+}
+
+async function calcular() {
+  const err = $("r-err");
+  err.hidden = true;
+  const params = new URLSearchParams({
+    item_id: $("item").value,
+    quantidade: $("qtd").value || "1",
+    renda_mensal: $("renda").value || "0",
+    carga_pct: $("carga").value,
+    parcela_saude_pct: $("parcela").value,
+  });
+  try {
+    const r = await api("/api/calcular?" + params);
+    mostrar(r);
+  } catch (e) {
+    $("resultado").hidden = false;
+    err.textContent = e.message;
+    err.hidden = false;
+  }
+}
+
+function mostrar(r) {
+  const it = r.item;
+  $("resultado").hidden = false;
+  $("r-nome").textContent = `${r.quantidade}x ${it.nome}`;
+  const b = $("r-badge");
+  b.textContent = it.validado ? "valor validado" : "valor estimado";
+  b.className = "badge " + (it.validado ? "ok" : "");
+
+  $("r-zero").textContent = brl.format(r.pago_na_hora);
+  $("r-custo").textContent = brl.format(r.custo_total);
+  $("r-part").textContent = r.valor_particular_total == null ? "não vendido" : brl.format(r.valor_particular_total);
+
+  let punch = `Na porta o preço é zero, mas o sistema gasta cerca de <b>${brl.format(r.custo_total)}</b>. Quem paga é a sociedade, via impostos.`;
+  if (r.diferenca_particular != null && r.diferenca_particular > 0)
+    punch += ` No particular você pagaria <b>${brl.format(r.diferenca_particular)}</b> a mais.`;
+  $("r-punch").innerHTML = punch;
+
+  const temRenda = r.renda_anual > 0;
+  $("r-renda").hidden = !temRenda;
+  if (temRenda) {
+    $("r-imp").textContent = brl.format(r.impostos_anuais);
+    $("r-imp-saude").textContent = brl.format(r.imposto_saude_anual);
+    $("r-unid").textContent = `${num.format(r.unidades_cobertas_por_ano)} ${it.unidade}(s)`;
+    const pct = r.cobertura_pct ?? 0;
+    $("r-bar").style.width = Math.min(pct, 100) + "%";
+    $("r-bar-txt").textContent = pct >= 100
+      ? `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% desse uso: você contribui mais do que consome neste item.`
+      : `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% do custo desse uso. O restante é financiado por outros contribuintes.`;
+  }
+}
+
+function agendar() { clearTimeout(timer); timer = setTimeout(calcular, 250); }
+
+async function init() {
+  const [lista, par] = await Promise.all([api("/api/itens"), api("/api/parametros")]);
+  ITENS = lista.itens; CATS = lista.categorias;
+  $("carga").value = par.parametros.carga_tributaria_pct;
+  $("parcela").value = par.parametros.parcela_saude_pct;
+  $("fontes").innerHTML = par.fontes.map((f) => `<li><a href="${f.url}" target="_blank" rel="noopener">${f.titulo}</a></li>`).join("");
+  preencherSelect(); desenharTabela(); calcular();
+
+  ["item", "qtd", "renda", "carga", "parcela"].forEach((id) => $(id).addEventListener("input", agendar));
+  $("busca").addEventListener("input", desenharTabela);
+  $("cat").addEventListener("change", desenharTabela);
+  $("tbody").addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-id]");
+    if (!tr) return;
+    $("item").value = tr.dataset.id;
+    calcular();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+init().catch((e) => { $("resultado").hidden = false; $("r-err").textContent = e.message; $("r-err").hidden = false; });
+</script>
+</body>
+</html>
