@@ -14,8 +14,7 @@ CalcularSUS/
 │   └── dados.py      # itens, categorias, parâmetros e fontes
 ├── public/
 │   └── index.html    # interface
-├── requirements.txt
-└── vercel.json       # rewrite /api/* -> função Python
+└── requirements.txt
 ```
 
 ## Rodar localmente
