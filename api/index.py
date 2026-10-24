@@ -6,7 +6,7 @@ from flask import Flask, jsonify, request
 
 # Garante que "dados.py" (mesma pasta) seja importável na Vercel e localmente.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dados import CATEGORIAS, FONTES, ITENS, PARAMETROS  # noqa: E402
+from dados import CATEGORIAS, CENARIOS, FONTES, ITENS, PARAMETROS  # noqa: E402
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
@@ -29,6 +29,72 @@ def _numero(valor, padrao, minimo=0.0, maximo=None):
     return n
 
 
+def _validar_quantidade(item, quantidade):
+    """Aplica o limite anual do item (ex.: 12 meses para remédios mensais)."""
+    limite = item.get("max_por_ano", 100_000)
+    if quantidade > limite:
+        raise ValueError(f"{item['nome']}: máximo de {limite} por ano")
+    return quantidade
+
+
+def _contribuicao(renda_mensal, carga_pct, parcela_saude_pct):
+    renda_anual = renda_mensal * 12
+    impostos_anuais = renda_anual * carga_pct / 100
+    imposto_saude_anual = impostos_anuais * parcela_saude_pct / 100
+    return renda_anual, impostos_anuais, imposto_saude_anual
+
+
+def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
+    """Soma o consumo de vários itens e compara com a contribuição anual."""
+    linhas = []
+    custo_total = 0.0
+    particular_total = 0.0
+    particular_completo = True
+
+    for entrada in linhas_in:
+        item = _ITENS_POR_ID.get(entrada.get("item_id"))
+        if item is None:
+            raise ValueError(f"item_id inválido: {entrada.get('item_id')!r}")
+        qtd = _validar_quantidade(item, _numero(entrada.get("quantidade"), 1, 0, 100_000))
+        custo = item["custo_sus"] * qtd
+        particular = item["valor_particular"] * qtd if item["valor_particular"] is not None else None
+        custo_total += custo
+        if particular is None:
+            particular_completo = False
+        else:
+            particular_total += particular
+        linhas.append({
+            "item_id": item["id"],
+            "nome": item["nome"],
+            "unidade": item["unidade"],
+            "quantidade": qtd,
+            "max_por_ano": item.get("max_por_ano"),
+            "custo": round(custo, 2),
+            "valor_particular": round(particular, 2) if particular is not None else None,
+        })
+
+    renda_anual, impostos_anuais, imposto_saude = _contribuicao(renda_mensal, carga_pct, parcela_saude_pct)
+    tem_renda = imposto_saude > 0
+    saldo = imposto_saude - custo_total
+
+    return {
+        "linhas": linhas,
+        "custo_total": round(custo_total, 2),
+        "valor_particular_total": round(particular_total, 2),
+        "particular_completo": particular_completo,
+        "renda_anual": round(renda_anual, 2),
+        "impostos_anuais": round(impostos_anuais, 2),
+        "imposto_saude_anual": round(imposto_saude, 2),
+        "tem_renda": tem_renda,
+        # saldo > 0: contribuição cobre o consumo; saldo < 0: outros contribuintes cobrem a diferença
+        "saldo": round(saldo, 2),
+        "cobertura_pct": round(imposto_saude / custo_total * 100, 1) if custo_total and tem_renda else None,
+        "vezes_a_contribuicao": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
+        "anos_para_cobrir": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
+        "premissas": {"carga_pct": carga_pct, "parcela_saude_pct": parcela_saude_pct},
+    }
+
+
 def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct):
     custo_unit = item["custo_sus"]
     particular_unit = item["valor_particular"]
@@ -36,9 +102,9 @@ def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct):
     custo_total = custo_unit * quantidade
     particular_total = particular_unit * quantidade if particular_unit is not None else None
 
-    renda_anual = renda_mensal * 12
-    impostos_anuais = renda_anual * carga_pct / 100
-    imposto_saude_anual = impostos_anuais * parcela_saude_pct / 100
+    renda_anual, impostos_anuais, imposto_saude_anual = _contribuicao(
+        renda_mensal, carga_pct, parcela_saude_pct
+    )
 
     unidades_cobertas = imposto_saude_anual / custo_unit if custo_unit else None
     cobertura_pct = (imposto_saude_anual / custo_total * 100) if custo_total else None
@@ -81,7 +147,9 @@ def rota_calcular():
         return jsonify({"erro": "item_id inválido ou ausente"}), 400
 
     try:
-        quantidade = _numero(dados.get("quantidade"), 1, minimo=0, maximo=100_000)
+        quantidade = _validar_quantidade(
+            item, _numero(dados.get("quantidade"), 1, minimo=0, maximo=100_000)
+        )
         renda = _numero(dados.get("renda_mensal"), 0, minimo=0, maximo=10_000_000)
         carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
         parcela = _numero(dados.get("parcela_saude_pct"), PARAMETROS["parcela_saude_pct"], 0, 100)
@@ -89,6 +157,46 @@ def rota_calcular():
         return jsonify({"erro": str(e)}), 400
 
     return jsonify(calcular(item, quantidade, renda, carga, parcela))
+
+
+@app.get("/api/cenarios")
+def listar_cenarios():
+    return jsonify({"cenarios": CENARIOS})
+
+
+@app.route("/api/cesta", methods=["GET", "POST"])
+def rota_cesta():
+    """Cesta de consumo anual.
+
+    POST JSON: {"itens": [{"item_id": "...", "quantidade": 2}], "renda_mensal": 3000, ...}
+    GET: ?itens=consulta_basica:4,hemograma:2&renda_mensal=3000
+    """
+    if request.method == "POST":
+        dados = request.get_json(silent=True) or {}
+        brutos = dados.get("itens") or []
+    else:
+        dados = request.args
+        brutos = []
+        for parte in (dados.get("itens") or "").split(","):
+            if not parte.strip():
+                continue
+            item_id, _, qtd = parte.partition(":")
+            brutos.append({"item_id": item_id.strip(), "quantidade": qtd or 1})
+
+    if not isinstance(brutos, list) or not brutos:
+        return jsonify({"erro": "informe ao menos um item na cesta"}), 400
+    if len(brutos) > 50:
+        return jsonify({"erro": "a cesta aceita no máximo 50 itens"}), 400
+    if not all(isinstance(b, dict) for b in brutos):
+        return jsonify({"erro": "formato de itens inválido"}), 400
+
+    try:
+        renda = _numero(dados.get("renda_mensal"), 0, minimo=0, maximo=10_000_000)
+        carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
+        parcela = _numero(dados.get("parcela_saude_pct"), PARAMETROS["parcela_saude_pct"], 0, 100)
+        return jsonify(calcular_cesta(brutos, renda, carga, parcela))
+    except ValueError as e:
+        return jsonify({"erro": str(e)}), 400
 
 
 @app.get("/api/saude")

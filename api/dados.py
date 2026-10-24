@@ -148,3 +148,79 @@ ITENS = [
 for _i in ITENS:
     _i.setdefault("validado", False)
     _i.setdefault("fonte", _FONTE_PADRAO)
+    # Itens cobrados por mês só podem ser usados até 12 meses por ano.
+    if _i["unidade"] == "mês":
+        _i["max_por_ano"] = 12
+
+# --------------------------------------------------------------------------
+# Cenários prontos: combinações ilustrativas de consumo em 1 ano.
+# As quantidades são exemplos didáticos, não protocolos clínicos.
+# --------------------------------------------------------------------------
+CENARIOS = [
+    {
+        "id": "diabetico",
+        "nome": "Pessoa com diabetes",
+        "descricao": "Acompanhamento regular: consultas, exames de sangue, metformina e insulina.",
+        "itens": [
+            {"item_id": "consulta_basica", "quantidade": 4},
+            {"item_id": "consulta_especialista", "quantidade": 2},
+            {"item_id": "hemograma", "quantidade": 4},
+            {"item_id": "metformina", "quantidade": 12},
+            {"item_id": "insulina_nph", "quantidade": 12},
+        ],
+    },
+    {
+        "id": "gestante",
+        "nome": "Gestação com parto",
+        "descricao": "Pré-natal, exames, ultrassons, vacinas e parto normal com internação.",
+        "itens": [
+            {"item_id": "consulta_basica", "quantidade": 7},
+            {"item_id": "hemograma", "quantidade": 3},
+            {"item_id": "ultrassom", "quantidade": 3},
+            {"item_id": "vacina", "quantidade": 2},
+            {"item_id": "parto_normal", "quantidade": 1},
+        ],
+    },
+    {
+        "id": "hemodialise",
+        "nome": "Hemodiálise por 1 ano",
+        "descricao": "Três sessões por semana (156 por ano) e acompanhamento com especialista.",
+        "itens": [
+            {"item_id": "hemodialise", "quantidade": 156},
+            {"item_id": "consulta_especialista", "quantidade": 4},
+            {"item_id": "hemograma", "quantidade": 12},
+        ],
+    },
+    {
+        "id": "uti",
+        "nome": "Internação de 10 dias na UTI",
+        "descricao": "Diárias de UTI com exames de imagem e laboratório durante a internação.",
+        "itens": [
+            {"item_id": "samu", "quantidade": 1},
+            {"item_id": "uti_diaria", "quantidade": 10},
+            {"item_id": "tomografia", "quantidade": 1},
+            {"item_id": "raio_x", "quantidade": 2},
+            {"item_id": "hemograma", "quantidade": 6},
+        ],
+    },
+    {
+        "id": "alto_custo",
+        "nome": "Medicamento de alto custo",
+        "descricao": "Uma dose a cada 15 dias (26 por ano) com consultas e exames de controle.",
+        "itens": [
+            {"item_id": "alto_custo", "quantidade": 26},
+            {"item_id": "consulta_especialista", "quantidade": 4},
+            {"item_id": "hemograma", "quantidade": 4},
+        ],
+    },
+    {
+        "id": "hiv",
+        "nome": "Tratamento de HIV",
+        "descricao": "Antirretrovirais todo mês, consultas com especialista e exames de controle.",
+        "itens": [
+            {"item_id": "antirretroviral", "quantidade": 12},
+            {"item_id": "consulta_especialista", "quantidade": 4},
+            {"item_id": "hemograma", "quantidade": 4},
+        ],
+    },
+]

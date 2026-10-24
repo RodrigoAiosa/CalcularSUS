@@ -29,16 +29,24 @@
   header p { margin: 0; color: var(--muted); max-width: 640px; font-size: 18px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
           padding: 20px; margin-bottom: 20px; }
-  h2 { margin: 0 0 14px; font-size: 20px; }
+  h2 { margin: 0 0 6px; font-size: 20px; }
+  .sub { margin: 0 0 14px; color: var(--muted); font-size: 14px; }
   .grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
   label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 4px; }
   select, input { width: 100%; padding: 10px 12px; font: inherit; color: var(--ink);
           background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
-  select:focus, input:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
+  select:focus, input:focus, button:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
   .full { grid-column: 1 / -1; }
   details { margin-top: 14px; }
   summary { cursor: pointer; color: var(--brand); font-weight: 600; }
   .hint { font-size: 13px; color: var(--muted); margin-top: 6px; }
+
+  button { font: inherit; cursor: pointer; border-radius: 10px; border: 1px solid var(--line);
+           background: var(--bg); color: var(--ink); padding: 9px 14px; }
+  button:hover { border-color: var(--brand); }
+  button.primary { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); font-weight: 600; }
+  button.link { border: 0; background: none; color: var(--accent); padding: 4px 8px; }
+  .actions { display: flex; align-items: end; }
 
   .result-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin-bottom: 14px; }
   .result-head strong { font-size: 18px; }
@@ -50,11 +58,28 @@
   .stat.cost b { color: var(--accent); }
   .punch { margin: 16px 0 0; padding: 14px 16px; border-left: 4px solid var(--brand);
            background: var(--soft); border-radius: 0 12px 12px 0; }
-  .bar { height: 12px; background: var(--line); border-radius: 99px; overflow: hidden; margin-top: 8px; }
-  .bar > i { display: block; height: 100%; background: var(--brand); width: 0; transition: width .3s; }
+  .punch.alert { border-left-color: var(--accent); }
   .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 99px;
            background: var(--warn-bg); color: var(--warn-ink); }
   .badge.ok { background: var(--soft); color: var(--brand); }
+
+  /* Gráfico: contribuição x custo */
+  .chart { margin-top: 16px; }
+  .chart h3 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+  .brow { display: grid; grid-template-columns: 170px 1fr 120px; gap: 10px; align-items: center; margin: 8px 0; font-size: 14px; }
+  .btrack { height: 22px; background: var(--line); border-radius: 6px; overflow: hidden; }
+  .bfill { height: 100%; border-radius: 6px; transition: width .35s; min-width: 2px; }
+  .bfill.contrib { background: var(--brand); }
+  .bfill.custo { background: var(--accent); }
+  .bval { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  @media (max-width: 560px) { .brow { grid-template-columns: 1fr; gap: 4px; } .bval { text-align: left; } }
+
+  /* Cenários e cesta */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .chip { border-radius: 99px; padding: 7px 14px; font-size: 14px; }
+  .chip.on { background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
+  .cesta-vazia { color: var(--muted); padding: 14px 0; }
+  .qtd-in { width: 84px; padding: 6px 8px; }
 
   .tools { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .tools input { flex: 1 1 220px; }
@@ -64,9 +89,9 @@
   th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
   td:first-child { white-space: normal; min-width: 220px; }
   th { color: var(--muted); font-weight: 600; font-size: 13px; }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover { background: var(--soft); }
-  td.num, th.num { text-align: right; }
+  tbody tr.click { cursor: pointer; }
+  tbody tr.click:hover { background: var(--soft); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 
   .aviso { background: var(--warn-bg); color: var(--warn-ink); border-radius: var(--radius);
            padding: 14px 16px; font-size: 14px; }
@@ -83,19 +108,13 @@
     <p>No SUS você não paga na porta. Mas a conta existe: ela é paga por todos os brasileiros, através dos impostos. Veja quanto custa cada atendimento e medicamento.</p>
   </header>
 
-  <section class="card" aria-labelledby="t-calc">
-    <h2 id="t-calc">Calculadora</h2>
+  <!-- Dados do usuário (usados na calculadora e na cesta) -->
+  <section class="card" aria-labelledby="t-dados">
+    <h2 id="t-dados">1. Seus dados</h2>
+    <p class="sub">Usamos sua renda para estimar quanto dos seus impostos vai para a saúde pública.</p>
     <div class="grid">
-      <div class="full">
-        <label for="item">Atendimento ou medicamento</label>
-        <select id="item"></select>
-      </div>
       <div>
-        <label for="qtd">Quantas vezes por ano?</label>
-        <input id="qtd" type="number" min="0" step="1" value="1" inputmode="numeric">
-      </div>
-      <div>
-        <label for="renda">Sua renda mensal (R$) - opcional</label>
+        <label for="renda">Sua renda mensal (R$)</label>
         <input id="renda" type="number" min="0" step="100" placeholder="ex.: 3000" inputmode="decimal">
       </div>
     </div>
@@ -115,31 +134,89 @@
     </details>
   </section>
 
-  <section class="card" id="resultado" aria-live="polite" hidden>
-    <div class="result-head">
-      <strong id="r-nome"></strong>
-      <span id="r-badge" class="badge"></span>
-    </div>
-    <div class="stats">
-      <div class="stat zero"><small>Você pagou na hora</small><b id="r-zero">R$ 0,00</b></div>
-      <div class="stat cost"><small id="r-custo-l">Custo real para o sistema</small><b id="r-custo"></b></div>
-      <div class="stat"><small>No particular custaria</small><b id="r-part"></b></div>
-    </div>
-    <p class="punch" id="r-punch"></p>
-    <div id="r-renda" hidden>
-      <div class="stats" style="margin-top:14px">
-        <div class="stat"><small>Impostos que você paga por ano (estimativa)</small><b id="r-imp"></b></div>
-        <div class="stat"><small>Parte que vai para a saúde por ano</small><b id="r-imp-saude"></b></div>
-        <div class="stat"><small>Isso paga quantas unidades por ano</small><b id="r-unid"></b></div>
+  <!-- Cesta do ano -->
+  <section class="card" id="sec-cesta" aria-labelledby="t-cesta">
+    <h2 id="t-cesta">2. Cesta de consumo do ano</h2>
+    <p class="sub">Escolha um cenário pronto ou monte a sua cesta. Itens baratos isolados parecem pouco; o peso aparece no conjunto e nos eventos caros.</p>
+    <div class="chips" id="chips" role="group" aria-label="Cenários prontos"></div>
+    <p class="hint" id="cen-desc"></p>
+
+    <div id="cesta-vazia" class="cesta-vazia">Sua cesta está vazia. Escolha um cenário acima ou adicione itens pela calculadora abaixo.</div>
+    <div id="cesta-box" hidden>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Item</th><th>Quantidade</th><th class="num">Custo no ano</th><th></th></tr></thead>
+          <tbody id="cesta-body"></tbody>
+        </table>
       </div>
-      <div class="bar" aria-hidden="true"><i id="r-bar"></i></div>
-      <p class="hint" id="r-bar-txt"></p>
+      <div style="margin-top:10px"><button class="link" id="limpar" type="button">Limpar cesta</button></div>
+
+      <div id="cesta-res" aria-live="polite" style="margin-top:12px">
+        <div class="stats">
+          <div class="stat zero"><small>Você pagou na hora</small><b>R$ 0,00</b></div>
+          <div class="stat cost"><small>Custo do consumo no ano</small><b id="c-custo"></b></div>
+          <div class="stat"><small id="c-part-l">No particular custaria</small><b id="c-part"></b></div>
+        </div>
+        <div id="c-renda" hidden>
+          <div class="chart">
+            <h3>Sua contribuição para a saúde x custo do consumo (por ano)</h3>
+            <div id="c-bars"></div>
+          </div>
+          <div class="stats" style="margin-top:12px">
+            <div class="stat"><small>Parte dos seus impostos que vai para a saúde</small><b id="c-contrib"></b></div>
+            <div class="stat"><small id="c-saldo-l">Diferença</small><b id="c-saldo"></b></div>
+            <div class="stat"><small>Anos de contribuição para cobrir sozinho</small><b id="c-anos"></b></div>
+          </div>
+        </div>
+        <p class="punch" id="c-punch"></p>
+      </div>
     </div>
-    <p class="err" id="r-err" hidden></p>
+    <p class="err" id="c-err" hidden></p>
+  </section>
+
+  <!-- Calculadora de um item -->
+  <section class="card" aria-labelledby="t-calc">
+    <h2 id="t-calc">3. Calculadora de um item</h2>
+    <p class="sub">Veja o custo de um atendimento ou medicamento e adicione à cesta.</p>
+    <div class="grid">
+      <div class="full">
+        <label for="item">Atendimento ou medicamento</label>
+        <select id="item"></select>
+      </div>
+      <div>
+        <label for="qtd" id="qtd-l">Quantas vezes por ano?</label>
+        <input id="qtd" type="number" min="0" step="1" value="1" inputmode="numeric">
+      </div>
+      <div class="actions">
+        <button class="primary" id="add" type="button">Adicionar à cesta</button>
+      </div>
+    </div>
+
+    <div id="resultado" aria-live="polite" hidden style="margin-top:18px">
+      <div class="result-head">
+        <strong id="r-nome"></strong>
+        <span id="r-badge" class="badge"></span>
+      </div>
+      <div class="stats">
+        <div class="stat zero"><small>Você pagou na hora</small><b id="r-zero">R$ 0,00</b></div>
+        <div class="stat cost"><small>Custo real para o sistema</small><b id="r-custo"></b></div>
+        <div class="stat"><small>No particular custaria</small><b id="r-part"></b></div>
+      </div>
+      <p class="punch" id="r-punch"></p>
+      <div id="r-renda" hidden>
+        <div class="chart">
+          <h3>Sua contribuição para a saúde x custo deste uso (por ano)</h3>
+          <div id="r-bars"></div>
+        </div>
+        <p class="hint" id="r-bar-txt"></p>
+      </div>
+      <p class="err" id="r-err" hidden></p>
+    </div>
   </section>
 
   <section class="card">
     <h2>Tabela de valores</h2>
+    <p class="sub">Clique em uma linha para calcular.</p>
     <div class="tools">
       <input id="busca" type="search" placeholder="Buscar (ex.: consulta, insulina, UTI)">
       <select id="cat"></select>
@@ -150,13 +227,13 @@
         <tbody id="tbody"></tbody>
       </table>
     </div>
-    <p class="hint">Clique em uma linha para calcular.</p>
   </section>
 
   <section class="card">
     <h2>Metodologia e fontes</h2>
     <p>O custo por item é o valor de referência para o sistema público; o "particular" é o preço aproximado de mercado. A parte da sua renda que vira saúde é: <em>renda anual × carga tributária × % aplicado em saúde</em>. É uma estimativa educativa, não um extrato do que você realmente pagou.</p>
-    <p class="aviso"><b>Atenção:</b> os valores por item ainda são estimativas e precisam ser validados no SIGTAP e no Banco de Preços em Saúde antes de uso público.</p>
+    <p>O SUS funciona como um fundo coletivo: todos contribuem e cada um usa conforme a necessidade. Por isso é normal que, em um ano com doença grave, o custo supere em muito o que a pessoa contribuiu, e que em anos sem uso aconteça o contrário.</p>
+    <p class="aviso"><b>Atenção:</b> os valores por item ainda são estimativas e precisam ser validados no SIGTAP e no Banco de Preços em Saúde antes de uso público. As quantidades dos cenários são exemplos didáticos, não protocolos clínicos.</p>
     <ul class="fontes" id="fontes"></ul>
   </section>
 
@@ -167,30 +244,68 @@
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const num = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
 const $ = (id) => document.getElementById(id);
-let ITENS = [], CATS = {}, timer;
 
+let ITENS = [], CATS = {}, CENARIOS = [];
+let cesta = [];              // [{item_id, quantidade}]
+let cenarioAtivo = null;
+let timerItem, timerCesta;
+
+/* ---------- utilidades ---------- */
 async function api(path, opts) {
   const r = await fetch(path, opts);
   const j = await r.json();
   if (!r.ok) throw new Error(j.erro || "Erro na API");
   return j;
 }
+const porId = (id) => ITENS.find((i) => i.id === id);
 
+const PLURAL = { "mês": "meses", "diária": "diárias", "sessão": "sessões" };
+function rotulo(unidade, n) {
+  if (Math.abs(n - 1) < 1e-9) return unidade;
+  return PLURAL[unidade] || unidade + "s";
+}
+function pergunta(item) {
+  return item && item.unidade === "mês" ? "Quantos meses por ano? (máx. 12)" : "Quantas vezes por ano?";
+}
+function dados() {
+  return {
+    renda_mensal: $("renda").value || "0",
+    carga_pct: $("carga").value,
+    parcela_saude_pct: $("parcela").value,
+  };
+}
+
+/* Gráfico de duas barras: contribuição x custo */
+function barras(el, contrib, custo) {
+  const max = Math.max(contrib, custo, 1);
+  const linha = (rot, valor, cls) => `
+    <div class="brow">
+      <span>${rot}</span>
+      <div class="btrack"><div class="bfill ${cls}" style="width:${(valor / max) * 100}%"></div></div>
+      <span class="bval">${brl.format(valor)}</span>
+    </div>`;
+  el.innerHTML = linha("Sua contribuição para a saúde", contrib, "contrib") +
+                 linha("Custo do consumo", custo, "custo");
+}
+
+/* ---------- carga inicial ---------- */
 function preencherSelect() {
   const sel = $("item");
   sel.innerHTML = "";
   for (const [cid, nome] of Object.entries(CATS)) {
     const g = document.createElement("optgroup");
     g.label = nome;
-    ITENS.filter((i) => i.categoria === cid).forEach((i) => {
-      const o = new Option(i.nome, i.id);
-      g.appendChild(o);
-    });
+    ITENS.filter((i) => i.categoria === cid).forEach((i) => g.appendChild(new Option(i.nome, i.id)));
     sel.appendChild(g);
   }
-  const cat = $("cat");
-  cat.innerHTML = '<option value="">Todas as categorias</option>' +
+  $("cat").innerHTML = '<option value="">Todas as categorias</option>' +
     Object.entries(CATS).map(([id, n]) => `<option value="${id}">${n}</option>`).join("");
+}
+
+function desenharChips() {
+  $("chips").innerHTML = CENARIOS.map((c) =>
+    `<button type="button" class="chip ${c.id === cenarioAtivo ? "on" : ""}" data-cen="${c.id}">${c.nome}</button>`
+  ).join("");
 }
 
 function desenharTabela() {
@@ -198,7 +313,7 @@ function desenharTabela() {
   const c = $("cat").value;
   const linhas = ITENS.filter((i) => (!c || i.categoria === c) && (!q || i.nome.toLowerCase().includes(q)));
   $("tbody").innerHTML = linhas.map((i) => `
-    <tr data-id="${i.id}">
+    <tr class="click" data-id="${i.id}">
       <td>${i.nome}<br><small style="color:var(--muted)">por ${i.unidade}</small></td>
       <td class="num">${brl.format(i.custo_sus)}</td>
       <td class="num">${i.valor_particular == null ? "-" : brl.format(i.valor_particular)}</td>
@@ -206,19 +321,25 @@ function desenharTabela() {
     </tr>`).join("") || '<tr><td colspan="4">Nenhum item encontrado.</td></tr>';
 }
 
-async function calcular() {
+/* ---------- calculadora de um item ---------- */
+function ajustarCampoQtd() {
+  const it = porId($("item").value);
+  $("qtd-l").textContent = pergunta(it);
+  const max = it && it.max_por_ano ? it.max_por_ano : "";
+  $("qtd").max = max;
+  if (max && Number($("qtd").value) > max) $("qtd").value = max;
+}
+
+async function calcularItem() {
   const err = $("r-err");
   err.hidden = true;
   const params = new URLSearchParams({
     item_id: $("item").value,
     quantidade: $("qtd").value || "1",
-    renda_mensal: $("renda").value || "0",
-    carga_pct: $("carga").value,
-    parcela_saude_pct: $("parcela").value,
+    ...dados(),
   });
   try {
-    const r = await api("/api/calcular?" + params);
-    mostrar(r);
+    mostrarItem(await api("/api/calcular?" + params));
   } catch (e) {
     $("resultado").hidden = false;
     err.textContent = e.message;
@@ -226,10 +347,10 @@ async function calcular() {
   }
 }
 
-function mostrar(r) {
+function mostrarItem(r) {
   const it = r.item;
   $("resultado").hidden = false;
-  $("r-nome").textContent = `${r.quantidade}x ${it.nome}`;
+  $("r-nome").textContent = `${num.format(r.quantidade)} ${rotulo(it.unidade, r.quantidade)} de ${it.nome}`;
   const b = $("r-badge");
   b.textContent = it.validado ? "valor validado" : "valor estimado";
   b.className = "badge " + (it.validado ? "ok" : "");
@@ -246,38 +367,172 @@ function mostrar(r) {
   const temRenda = r.renda_anual > 0;
   $("r-renda").hidden = !temRenda;
   if (temRenda) {
-    $("r-imp").textContent = brl.format(r.impostos_anuais);
-    $("r-imp-saude").textContent = brl.format(r.imposto_saude_anual);
-    $("r-unid").textContent = `${num.format(r.unidades_cobertas_por_ano)} ${it.unidade}(s)`;
+    barras($("r-bars"), r.imposto_saude_anual, r.custo_total);
     const pct = r.cobertura_pct ?? 0;
-    $("r-bar").style.width = Math.min(pct, 100) + "%";
     $("r-bar-txt").textContent = pct >= 100
-      ? `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% desse uso: você contribui mais do que consome neste item.`
-      : `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% do custo desse uso. O restante é financiado por outros contribuintes.`;
+      ? `Sua contribuição estimada para a saúde (${brl.format(r.imposto_saude_anual)}) cobre ${num.format(pct)}% deste uso. Para ver o peso do sistema, monte uma cesta com vários itens ou escolha um cenário.`
+      : `Sua contribuição estimada para a saúde cobre ${num.format(pct)}% do custo deste uso. O restante é financiado por outros contribuintes.`;
   }
 }
 
-function agendar() { clearTimeout(timer); timer = setTimeout(calcular, 250); }
+/* ---------- cesta ---------- */
+function adicionarItem(item_id, quantidade) {
+  const it = porId(item_id);
+  const max = it && it.max_por_ano ? it.max_por_ano : 100000;
+  const existente = cesta.find((l) => l.item_id === item_id);
+  if (existente) existente.quantidade = Math.min(max, existente.quantidade + quantidade);
+  else cesta.push({ item_id, quantidade: Math.min(max, quantidade) });
+  cenarioAtivo = null;
+  desenharChips();
+  atualizarCesta();
+}
 
+function escolherCenario(id) {
+  const c = CENARIOS.find((x) => x.id === id);
+  if (!c) return;
+  cesta = c.itens.map((l) => ({ ...l }));
+  cenarioAtivo = id;
+  $("cen-desc").textContent = c.descricao;
+  desenharChips();
+  atualizarCesta();
+}
+
+function agendarCesta() { clearTimeout(timerCesta); timerCesta = setTimeout(atualizarCesta, 250); }
+
+async function atualizarCesta() {
+  const vazia = cesta.length === 0;
+  $("cesta-vazia").hidden = !vazia;
+  $("cesta-box").hidden = vazia;
+  $("c-err").hidden = true;
+  if (vazia) return;
+  try {
+    const r = await api("/api/cesta", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itens: cesta, ...dados() }),
+    });
+    mostrarCesta(r);
+  } catch (e) {
+    $("c-err").textContent = e.message;
+    $("c-err").hidden = false;
+  }
+}
+
+function mostrarCesta(r) {
+  desenharLinhasCesta(r);
+  mostrarTotaisCesta(r);
+}
+
+function desenharLinhasCesta(r) {
+  $("cesta-body").innerHTML = r.linhas.map((l, i) => `
+    <tr>
+      <td>${l.nome}<br><small style="color:var(--muted)">${rotulo(l.unidade, l.quantidade)}</small></td>
+      <td><input class="qtd-in" type="number" min="1" step="1" ${l.max_por_ano ? `max="${l.max_por_ano}"` : ""}
+                 value="${l.quantidade}" data-i="${i}" aria-label="Quantidade de ${l.nome}"></td>
+      <td class="num">${brl.format(l.custo)}</td>
+      <td><button class="link" type="button" data-rm="${i}" aria-label="Remover ${l.nome}">remover</button></td>
+    </tr>`).join("");
+}
+
+function mostrarTotaisCesta(r) {
+  $("c-custo").textContent = brl.format(r.custo_total);
+  if (r.particular_completo) {
+    $("c-part-l").textContent = "No particular custaria";
+    $("c-part").textContent = brl.format(r.valor_particular_total);
+  } else {
+    $("c-part-l").textContent = "No particular custaria (itens que existem à venda)";
+    $("c-part").textContent = brl.format(r.valor_particular_total);
+  }
+
+  $("c-renda").hidden = !r.tem_renda;
+  const punch = $("c-punch");
+  if (!r.tem_renda) {
+    punch.className = "punch";
+    punch.innerHTML = `Na porta você pagou zero, mas esse consumo custa cerca de <b>${brl.format(r.custo_total)}</b> ao sistema. Informe sua renda no passo 1 para comparar com a sua contribuição.`;
+    return;
+  }
+
+  barras($("c-bars"), r.imposto_saude_anual, r.custo_total);
+  $("c-contrib").textContent = brl.format(r.imposto_saude_anual);
+  const falta = r.saldo < 0;
+  $("c-saldo-l").textContent = falta ? "Custo acima da sua contribuição" : "Sobra da sua contribuição";
+  $("c-saldo").textContent = brl.format(Math.abs(r.saldo));
+  $("c-anos").textContent = r.anos_para_cobrir > 1 ? `${num.format(r.anos_para_cobrir)} anos` : "menos de 1 ano";
+
+  if (falta) {
+    punch.className = "punch alert";
+    punch.innerHTML = `Esse consumo custa <b>${num.format(r.vezes_a_contribuicao)}x</b> o que a sua renda destina à saúde por ano. A diferença de <b>${brl.format(-r.saldo)}</b> é financiada por outros contribuintes: é assim que o SUS funciona como um fundo coletivo.`;
+  } else {
+    punch.className = "punch";
+    punch.innerHTML = `Neste cenário a sua contribuição estimada cobre todo o consumo e ainda sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas.`;
+  }
+}
+
+/* ---------- inicialização ---------- */
 async function init() {
-  const [lista, par] = await Promise.all([api("/api/itens"), api("/api/parametros")]);
-  ITENS = lista.itens; CATS = lista.categorias;
+  const [lista, par, cen] = await Promise.all([api("/api/itens"), api("/api/parametros"), api("/api/cenarios")]);
+  ITENS = lista.itens; CATS = lista.categorias; CENARIOS = cen.cenarios;
   $("carga").value = par.parametros.carga_tributaria_pct;
   $("parcela").value = par.parametros.parcela_saude_pct;
   $("fontes").innerHTML = par.fontes.map((f) => `<li><a href="${f.url}" target="_blank" rel="noopener">${f.titulo}</a></li>`).join("");
-  preencherSelect(); desenharTabela(); calcular();
+  preencherSelect(); desenharChips(); desenharTabela(); ajustarCampoQtd(); calcularItem();
 
-  ["item", "qtd", "renda", "carga", "parcela"].forEach((id) => $(id).addEventListener("input", agendar));
+  const reagir = () => { clearTimeout(timerItem); timerItem = setTimeout(calcularItem, 250); agendarCesta(); };
+  ["renda", "carga", "parcela"].forEach((id) => $(id).addEventListener("input", reagir));
+  $("qtd").addEventListener("input", () => {
+    const max = Number($("qtd").max);
+    if (max && Number($("qtd").value) > max) $("qtd").value = max;   // nunca passa do limite anual
+    clearTimeout(timerItem); timerItem = setTimeout(calcularItem, 250);
+  });
+  $("item").addEventListener("change", () => { ajustarCampoQtd(); calcularItem(); });
+  $("add").addEventListener("click", () => {
+    const q = Math.max(1, Number($("qtd").value) || 1);
+    adicionarItem($("item").value, q);
+    $("sec-cesta").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  $("chips").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-cen]");
+    if (b) escolherCenario(b.dataset.cen);
+  });
+  $("limpar").addEventListener("click", () => { cesta = []; cenarioAtivo = null; $("cen-desc").textContent = ""; desenharChips(); atualizarCesta(); });
+  $("cesta-body").addEventListener("input", (e) => {
+    const inp = e.target.closest("input[data-i]");
+    if (!inp) return;
+    const l = cesta[Number(inp.dataset.i)];
+    const max = Number(inp.max) || 100000;
+    l.quantidade = Math.min(max, Math.max(1, Math.floor(Number(inp.value) || 1)));
+    cenarioAtivo = null; desenharChips();
+    // atualiza só os totais sem recriar o campo em edição
+    clearTimeout(timerCesta);
+    timerCesta = setTimeout(async () => {
+      try {
+        const r = await api("/api/cesta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itens: cesta, ...dados() }) });
+        // atualiza só custos e totais, sem recriar o campo em edição
+        r.linhas.forEach((ln, i) => { const td = $("cesta-body").rows[i]?.cells[2]; if (td) td.textContent = brl.format(ln.custo); });
+        mostrarTotaisCesta(r);
+      } catch (er) { $("c-err").textContent = er.message; $("c-err").hidden = false; }
+    }, 250);
+  });
+  $("cesta-body").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-rm]");
+    if (!b) return;
+    cesta.splice(Number(b.dataset.rm), 1);
+    cenarioAtivo = null; desenharChips();
+    atualizarCesta();
+  });
+
   $("busca").addEventListener("input", desenharTabela);
   $("cat").addEventListener("change", desenharTabela);
   $("tbody").addEventListener("click", (e) => {
     const tr = e.target.closest("tr[data-id]");
     if (!tr) return;
     $("item").value = tr.dataset.id;
-    calcular();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    ajustarCampoQtd(); calcularItem();
+    $("t-calc").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
+
 init().catch((e) => { $("resultado").hidden = false; $("r-err").textContent = e.message; $("r-err").hidden = false; });
 </script>
 </body>

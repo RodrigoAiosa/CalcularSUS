@@ -45,13 +45,28 @@ vercel --prod   # produção
 |------|-----------|
 | `GET /api/itens` | Lista categorias e itens |
 | `GET /api/parametros` | Premissas macro e fontes |
-| `GET/POST /api/calcular` | Calcula. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct` |
+| `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct` |
+| `GET /api/cenarios` | Cenários prontos (diabetes, gestação, hemodiálise, UTI, alto custo, HIV) |
+| `GET/POST /api/cesta` | Soma vários itens e compara com a contribuição anual |
 
-Exemplo:
+Exemplos:
 
 ```
 /api/calcular?item_id=consulta_basica&quantidade=4&renda_mensal=3000
+/api/cesta?itens=consulta_basica:4,hemograma:2&renda_mensal=3000
 ```
+
+`POST /api/cesta` aceita JSON: `{"itens": [{"item_id": "uti_diaria", "quantidade": 10}], "renda_mensal": 3000}`.
+
+Itens cobrados por mês (ex.: medicamentos de uso contínuo) aceitam no máximo 12 por ano (`max_por_ano`).
+
+## Interface
+
+1. **Seus dados:** renda e premissas (carga tributária e % para saúde).
+2. **Cesta do ano:** cenários prontos ou itens montados pelo usuário, com gráfico de contribuição x custo.
+3. **Calculadora de um item:** custo de um item e botão para adicionar à cesta.
+
+Os cenários ficam em `api/dados.py` (`CENARIOS`) e são exemplos didáticos, não protocolos clínicos.
 
 ## Como o cálculo funciona
 
