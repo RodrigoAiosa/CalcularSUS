@@ -7,12 +7,14 @@ Como os valores são tratados
   "validado" (valor oficial).
 - valor_sigtap: repasse federal oficial da Tabela SIGTAP (api/sigtap_dados.py,
   gerado por scripts/importar_sigtap.py). None = sem valor próprio na tabela.
-- valor_particular: preço aproximado de mercado (estimativa).
+- bps: preço de compra pública de medicamentos (api/bps_dados.py, gerado por
+  scripts/importar_bps.py). Quando existe, substitui o custo_sus do item; fica
+  "validado" só se a amostra for robusta (>= 30 compras, preços pouco dispersos).
+- valor_particular: preço aproximado de mercado (estimativa; ver CMED).
 
-O SIGTAP não cobre medicamentos de uso comum, vacinas nem atenção primária por
-procedimento; para esses itens, validar no BPS (https://bps.saude.gov.br) e na
-CMED (https://www.gov.br/anvisa). Os PARÂMETROS macro abaixo foram conferidos em
-reportagens/fontes públicas.
+Ainda sem fonte oficial: vacina, atenção primária/odontologia/SAMU (custo real) e
+antirretrovirais (compra centralizada, fora do BPS). Os PARÂMETROS macro abaixo
+foram conferidos em reportagens/fontes públicas.
 """
 
 # --------------------------------------------------------------------------
@@ -52,8 +54,8 @@ FONTES = [
         "url": "https://sigtap.datasus.gov.br",
     },
     {
-        "titulo": "BPS - Banco de Preços em Saúde (para validar medicamentos)",
-        "url": "https://bps.saude.gov.br",
+        "titulo": "BPS - Banco de Preços em Saúde, compras públicas (dados abertos do Ministério da Saúde)",
+        "url": "https://dadosabertos.saude.gov.br/dataset/bps",
     },
 ]
 
@@ -149,8 +151,18 @@ ITENS = [
 ]
 
 from sigtap_dados import COMPETENCIA_FMT, PROCEDIMENTOS  # noqa: E402  (gerado por scripts/importar_sigtap.py)
+from bps_dados import PERIODO as BPS_PERIODO, PRECOS as BPS_PRECOS  # noqa: E402  (gerado por scripts/importar_bps.py)
 
 SIGTAP_COMPETENCIA = COMPETENCIA_FMT
+
+
+def _brl(valor):
+    return f"{valor:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _bps_robusto(b):
+    """Amostra suficiente (>= 30 compras) e preços pouco dispersos (p75 <= 3 x p25)."""
+    return b["n_compras"] >= 30 and b["valor_p25"] > 0 and b["valor_p75"] <= 3 * b["valor_p25"]
 
 for _i in ITENS:
     # Itens cobrados por mês só podem ser usados até 12 meses por ano.
@@ -163,12 +175,28 @@ for _i in ITENS:
     _i["sigtap"] = _sig
     _i["valor_sigtap"] = _sig["valor"] if _sig and _sig["valor"] > 0 else None
 
-    # "validado" = o custo usado é exatamente o valor oficial do SIGTAP.
-    _i["validado"] = (
-        _i["valor_sigtap"] is not None and abs(_i["custo_sus"] - _i["valor_sigtap"]) < 0.005
-    )
-    if _i["validado"]:
+    # Preço de compra pública (BPS): substitui a estimativa de custo dos medicamentos.
+    _bps = BPS_PRECOS.get(_i["id"])
+    _i["bps"] = _bps
+    if _bps:
+        _i["custo_sus"] = _bps["valor"]
+
+    # "validado" = o custo usado vem de fonte oficial: valor idêntico ao do SIGTAP
+    # ou preço de compra do BPS com amostra robusta.
+    _sigtap_ok = _i["valor_sigtap"] is not None and abs(_i["custo_sus"] - _i["valor_sigtap"]) < 0.005
+    _bps_ok = _bps is not None and _bps_robusto(_bps)
+    _i["validado"] = _sigtap_ok or _bps_ok
+    _i["fonte_oficial"] = "SIGTAP" if _sigtap_ok else ("BPS" if _bps_ok else None)
+
+    if _sigtap_ok:
         _i["fonte"] = f"SIGTAP {_sig['codigo_fmt']} - competência {SIGTAP_COMPETENCIA}"
+    elif _bps:
+        _i["fonte"] = (
+            f"BPS (compras públicas): mediana de {_bps['n_compras']} compras em {BPS_PERIODO}, "
+            f"código BR {_bps['codigo_br']} ({_bps['apresentacao']}); faixa R$ {_brl(_bps['valor_p25'])} "
+            f"a R$ {_brl(_bps['valor_p75'])}"
+            + ("" if _bps_ok else ". Amostra pequena ou preços muito dispersos: usar com cautela")
+        )
     elif _i["valor_sigtap"] is not None:
         _vl = f"{_i['valor_sigtap']:.2f}".replace(".", ",")
         _i["fonte"] = (
@@ -181,7 +209,10 @@ for _i in ITENS:
             "(financiado por repasse global)"
         )
     elif _i["categoria"] == "medicamentos":
-        _i["fonte"] = "Estimativa. Medicamentos não constam no SIGTAP; validar no BPS/CMED"
+        _i["fonte"] = (
+            "Estimativa. Não consta no SIGTAP nem no BPS (compra centralizada pelo "
+            "Ministério da Saúde); validar com o Ministério"
+        )
     else:
         _i["fonte"] = "Estimativa. Sem procedimento equivalente no SIGTAP"
 

@@ -241,10 +241,10 @@
 
   <section class="card">
     <h2>Metodologia e fontes</h2>
-    <p><b>Duas bases de valor.</b> A <em>Tabela SIGTAP</em> (DATASUS) traz o valor que o Ministério da Saúde repassa por procedimento; é oficial, mas é um piso, porque estados e municípios complementam e muitos serviços (atenção primária, SAMU, vacinas, medicamentos) não têm valor por procedimento na tabela. O <em>custo estimado</em> é uma referência do custo real para o sistema: onde há valor oficial equivalente ele é usado, nos demais casos é estimativa. O "particular" é o preço aproximado de mercado.</p>
+    <p><b>Duas bases de valor.</b> A <em>Tabela SIGTAP</em> (DATASUS) traz o valor que o Ministério da Saúde repassa por procedimento; é oficial, mas é um piso, porque estados e municípios complementam e muitos serviços (atenção primária, SAMU, vacinas, medicamentos) não têm valor por procedimento na tabela. O <em>custo estimado</em> é uma referência do custo real para o sistema: onde há valor oficial equivalente ele é usado (SIGTAP para exames e hemodiálise; para medicamentos, a mediana dos preços de compras públicas do <em>Banco de Preços em Saúde</em>, 2024-2026), nos demais casos é estimativa. O "particular" é o preço aproximado de mercado (estimativa).</p>
     <p>A parte da sua renda que vira saúde é: <em>renda anual × carga tributária × % aplicado em saúde</em>. É uma estimativa educativa, não um extrato do que você realmente pagou.</p>
     <p>O SUS funciona como um fundo coletivo: todos contribuem e cada um usa conforme a necessidade. Por isso é normal que, em um ano com doença grave, o custo supere em muito o que a pessoa contribuiu, e que em anos sem uso aconteça o contrário.</p>
-    <p class="aviso"><b>Atenção:</b> os itens marcados como "estimativa" ainda não têm valor oficial correspondente e devem ser validados (medicamentos no Banco de Preços em Saúde). As quantidades dos cenários são exemplos didáticos, não protocolos clínicos.</p>
+    <p class="aviso"><b>Atenção:</b> os itens marcados como "estimativa" ainda não têm valor oficial correspondente (vacina, atenção primária, odontologia, SAMU e antirretrovirais), e "referência BPS (cautela)" indica poucas compras ou preços muito dispersos (insulina NPH e adalimumabe). Os preços "particular" também são estimativas. As quantidades dos cenários são exemplos didáticos, não protocolos clínicos.</p>
     <ul class="fontes" id="fontes"></ul>
   </section>
 
@@ -288,15 +288,22 @@ function dados() {
 }
 
 let SIGTAP_COMP = "";
+function statusTexto(i) {
+  if (i.validado) return `oficial (${i.fonte_oficial})`;
+  return i.bps ? "referência BPS (cautela)" : "estimativa";
+}
 const rotuloCusto = () => $("base").value === "sigtap" ? "Valor da tabela SIGTAP (repasse)" : "Custo estimado para o sistema";
 function semValorTitulo(i) {
   if (i.sigtap) return "Existe na tabela SIGTAP, mas sem valor próprio (financiado por repasse global)";
-  return i.categoria === "medicamentos" ? "Medicamentos não constam no SIGTAP (veja BPS/CMED)" : "Sem procedimento equivalente no SIGTAP";
+  if (i.categoria === "medicamentos") {
+    return i.bps ? "Medicamentos não constam no SIGTAP; o custo vem do BPS (compras públicas)" : "Não consta no SIGTAP nem no BPS";
+  }
+  return "Sem procedimento equivalente no SIGTAP";
 }
 function dicaBase() {
   $("base-dica").textContent = $("base").value === "sigtap"
     ? `Valores do repasse federal por procedimento (SIGTAP, competência ${SIGTAP_COMP}). É um piso: estados e municípios complementam, e itens sem valor na tabela entram como R$ 0,00.`
-    : "Custo estimado para o sistema (referência). Onde existe valor oficial no SIGTAP, ele é usado; nos demais casos é uma estimativa.";
+    : "Custo para o sistema (referência). Usa valor oficial do SIGTAP (exames, hemodiálise) ou preço de compra pública do BPS (medicamentos) quando existe; nos demais casos é estimativa.";
 }
 
 /* Gráfico de duas barras: contribuição x custo */
@@ -344,7 +351,7 @@ function desenharTabela() {
         ? `<span title="${semValorTitulo(i)}">sem valor</span>`
         : `${brl.format(i.valor_sigtap)}<br><small style="color:var(--muted)">${i.sigtap.codigo_fmt}</small>`}</td>
       <td class="num">${i.valor_particular == null ? "-" : brl.format(i.valor_particular)}</td>
-      <td><span class="badge ${i.validado ? "ok" : ""}">${i.validado ? "oficial (SIGTAP)" : "estimativa"}</span></td>
+      <td><span class="badge ${i.validado ? "ok" : ""}" title="${i.fonte}">${statusTexto(i)}</span></td>
     </tr>`).join("") || '<tr><td colspan="5">Nenhum item encontrado.</td></tr>';
 }
 
@@ -379,8 +386,11 @@ function mostrarItem(r) {
   $("resultado").hidden = false;
   $("r-nome").textContent = `${num.format(r.quantidade)} ${rotulo(it.unidade, r.quantidade)} de ${it.nome}`;
   const b = $("r-badge");
-  const oficial = it.validado || (r.base === "sigtap" && !r.sem_valor_base);
-  b.textContent = oficial ? "valor oficial (SIGTAP)" : "valor estimado";
+  const viaSigtap = r.base === "sigtap" && !r.sem_valor_base;
+  const oficial = it.validado || viaSigtap;
+  b.textContent = viaSigtap ? "valor oficial (SIGTAP)"
+    : it.validado ? `valor oficial (${it.fonte_oficial})`
+    : it.bps ? "referência BPS (cautela)" : "valor estimado";
   b.className = "badge " + (oficial ? "ok" : "");
 
   $("r-zero").textContent = brl.format(r.pago_na_hora);

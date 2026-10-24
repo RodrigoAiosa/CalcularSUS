@@ -12,9 +12,11 @@ CalcularSUS/
 ├── api/
 │   ├── index.py      # API Flask (rotas /api/*)
 │   ├── dados.py          # itens, categorias, cenários, parâmetros e fontes
-│   └── sigtap_dados.py   # valores oficiais do SIGTAP (gerado pelo script)
+│   ├── sigtap_dados.py   # valores oficiais do SIGTAP (gerado pelo script)
+│   └── bps_dados.py      # preços de medicamentos do BPS (gerado pelo script)
 ├── scripts/
-│   └── importar_sigtap.py  # importa a Tabela Unificada do SIGTAP
+│   ├── importar_sigtap.py  # importa a Tabela Unificada do SIGTAP
+│   └── importar_bps.py     # calcula preços de medicamentos a partir do BPS
 ├── public/
 │   └── index.html    # interface
 └── requirements.txt
@@ -115,15 +117,47 @@ O mapeamento item -> código do procedimento fica em `MAPEAMENTO` no próprio sc
 O zip desta competência foi obtido de um espelho público do FTP do DATASUS
 ([RenatoKR/SIGTAP](https://github.com/RenatoKR/SIGTAP)); confira os valores no site oficial antes de divulgar.
 
+### Preços de medicamentos (BPS)
+
+Os medicamentos usam o **Banco de Preços em Saúde** (compras públicas de municípios,
+estados e Ministério), período **2024-2026**, importado por `scripts/importar_bps.py`
+para `api/bps_dados.py` (arquivo gerado). Método: filtra o item pelo **código BR (CATMAT)**
+e pela unidade de fornecimento, e usa a **mediana** do preço unitário das compras
+multiplicada pela apresentação (ex.: 30 comprimidos). Não pondera por quantidade, porque a
+base tem registros com quantidades absurdas.
+
+| Item | Código BR | Compras | Valor (mediana) | Faixa (p25-p75) | Status |
+|------|-----------|---------|-----------------|-----------------|--------|
+| Losartana 50 mg x30 | 268856 | 131 | R$ 1,20 | 1,05 - 1,50 | oficial (BPS) |
+| Metformina 850 mg x60 | 267691 | 127 | R$ 7,50 | 6,48 - 9,00 | oficial (BPS) |
+| Omeprazol 20 mg x28 | 267712 | 110 | R$ 1,68 | 1,40 - 2,24 | oficial (BPS) |
+| Salbutamol aerossol | 294887 | 81 | R$ 12,23 | 10,28 - 14,25 | oficial (BPS) |
+| Insulina NPH frasco | 271157 | 10 | R$ 30,40 | 24,00 - 41,70 | amostra pequena |
+| Adalimumabe 40 mg | 290058 | 12 | R$ 1.838,10 | 641,15 - 3.533,00 | preços muito dispersos |
+
+Um item só fica `validado` se tiver pelo menos 30 compras e `p75 <= 3 x p25`.
+
+Os dados desta versão vieram de uma consolidação pública de terceiros
+([brunobriani-hub/analise_dados_BPS](https://github.com/brunobriani-hub/analise_dados_BPS)),
+que só limpa texto e converte tipos (removeu 19 linhas idênticas). Para usar a fonte
+oficial, baixe os zips anuais em [dadosabertos.saude.gov.br/dataset/bps](https://dadosabertos.saude.gov.br/dataset/bps)
+e rode:
+
+```bash
+python3 scripts/importar_bps.py 2024_csv.zip 2025_csv.zip 2026_csv.zip
+```
+
 ### O que ainda falta validar
 
-Medicamentos (`losartana`, `metformina`, `insulina_nph`, `omeprazol`, `salbutamol`,
-`antirretroviral`, `alto_custo`), vacina e o custo real de consulta básica, odontologia,
-SAMU e UPA: usar o [BPS](https://bps.saude.gov.br) e a CMED, ou dados do SIOPS/estados.
+- **Antirretrovirais:** compra centralizada pelo Ministério, não aparecem no BPS.
+- **Vacina:** financiada pelo PNI, sem procedimento no SIGTAP.
+- **Custo real** de consulta básica, odontologia, SAMU, UPA, parto, cesárea, UTI e catarata
+  (o SIGTAP traz só o repasse federal): usar SIOPS ou dados dos estados.
+- **Preços "particular":** todos são estimativas; a fonte oficial é a lista da CMED (Anvisa).
 
 ## Ideias para evoluir
 
 - Importar a tabela SIGTAP inteira e permitir escolher qualquer procedimento
-- Preços de medicamentos pelo BPS (compras públicas)
+- Mais medicamentos do BPS e da RENAME
 - Comparar por estado/município (SIOPS)
 - Compartilhar resultado como imagem

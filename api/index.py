@@ -7,7 +7,7 @@ from flask import Flask, jsonify, request
 # Garante que "dados.py" (mesma pasta) seja importável na Vercel e localmente.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from dados import (  # noqa: E402
-    CATEGORIAS, CENARIOS, FONTES, ITENS, PARAMETROS, SIGTAP_COMPETENCIA,
+    BPS_PERIODO, CATEGORIAS, CENARIOS, FONTES, ITENS, PARAMETROS, SIGTAP_COMPETENCIA,
 )
 
 app = Flask(__name__)
@@ -167,6 +167,7 @@ def parametros():
         "parametros": PARAMETROS,
         "fontes": FONTES,
         "sigtap_competencia": SIGTAP_COMPETENCIA,
+        "bps_periodo": BPS_PERIODO,
     })
 
 
