@@ -6,7 +6,9 @@ from flask import Flask, jsonify, request
 
 # Garante que "dados.py" (mesma pasta) seja importável na Vercel e localmente.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from dados import CATEGORIAS, CENARIOS, FONTES, ITENS, PARAMETROS  # noqa: E402
+from dados import (  # noqa: E402
+    CATEGORIAS, CENARIOS, FONTES, ITENS, PARAMETROS, SIGTAP_COMPETENCIA,
+)
 
 app = Flask(__name__)
 app.json.ensure_ascii = False
@@ -29,6 +31,22 @@ def _numero(valor, padrao, minimo=0.0, maximo=None):
     return n
 
 
+BASES = ("estimado", "sigtap")
+
+
+def _base(valor):
+    """'estimado' = custo de referência (padrão); 'sigtap' = repasse oficial da Tabela SIGTAP."""
+    base = (valor or "estimado").strip().lower()
+    if base not in BASES:
+        raise ValueError(f"base inválida: {valor!r} (use {' ou '.join(BASES)})")
+    return base
+
+
+def _valor_unitario(item, base):
+    """Valor unitário na base escolhida; None se o item não tem valor naquela base."""
+    return item["valor_sigtap"] if base == "sigtap" else item["custo_sus"]
+
+
 def _validar_quantidade(item, quantidade):
     """Aplica o limite anual do item (ex.: 12 meses para remédios mensais)."""
     limite = item.get("max_por_ano", 100_000)
@@ -44,9 +62,10 @@ def _contribuicao(renda_mensal, carga_pct, parcela_saude_pct):
     return renda_anual, impostos_anuais, imposto_saude_anual
 
 
-def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
+def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="estimado"):
     """Soma o consumo de vários itens e compara com a contribuição anual."""
     linhas = []
+    sem_valor = []
     custo_total = 0.0
     particular_total = 0.0
     particular_completo = True
@@ -56,7 +75,10 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
         if item is None:
             raise ValueError(f"item_id inválido: {entrada.get('item_id')!r}")
         qtd = _validar_quantidade(item, _numero(entrada.get("quantidade"), 1, 0, 100_000))
-        custo = item["custo_sus"] * qtd
+        unitario = _valor_unitario(item, base)
+        if unitario is None:  # item sem valor nesta base: conta 0 e avisa
+            sem_valor.append(item["nome"])
+        custo = (unitario or 0) * qtd
         particular = item["valor_particular"] * qtd if item["valor_particular"] is not None else None
         custo_total += custo
         if particular is None:
@@ -70,6 +92,7 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
             "quantidade": qtd,
             "max_por_ano": item.get("max_por_ano"),
             "custo": round(custo, 2),
+            "sem_valor_base": unitario is None,
             "valor_particular": round(particular, 2) if particular is not None else None,
         })
 
@@ -79,6 +102,8 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
 
     return {
         "linhas": linhas,
+        "base": base,
+        "itens_sem_valor": sem_valor,
         "custo_total": round(custo_total, 2),
         "valor_particular_total": round(particular_total, 2),
         "particular_completo": particular_completo,
@@ -95,8 +120,10 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct):
     }
 
 
-def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct):
-    custo_unit = item["custo_sus"]
+def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base="estimado"):
+    unitario = _valor_unitario(item, base)
+    sem_valor_base = unitario is None
+    custo_unit = unitario or 0.0
     particular_unit = item["valor_particular"]
 
     custo_total = custo_unit * quantidade
@@ -114,6 +141,8 @@ def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct):
         "item": item,
         "quantidade": quantidade,
         "pago_na_hora": 0.0,
+        "base": base,
+        "sem_valor_base": sem_valor_base,
         "custo_unitario": round(custo_unit, 2),
         "custo_total": round(custo_total, 2),
         "valor_particular_total": round(particular_total, 2) if particular_total is not None else None,
@@ -134,7 +163,11 @@ def listar_itens():
 
 @app.get("/api/parametros")
 def parametros():
-    return jsonify({"parametros": PARAMETROS, "fontes": FONTES})
+    return jsonify({
+        "parametros": PARAMETROS,
+        "fontes": FONTES,
+        "sigtap_competencia": SIGTAP_COMPETENCIA,
+    })
 
 
 @app.route("/api/calcular", methods=["GET", "POST"])
@@ -153,10 +186,11 @@ def rota_calcular():
         renda = _numero(dados.get("renda_mensal"), 0, minimo=0, maximo=10_000_000)
         carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
         parcela = _numero(dados.get("parcela_saude_pct"), PARAMETROS["parcela_saude_pct"], 0, 100)
+        base = _base(dados.get("base"))
     except ValueError as e:
         return jsonify({"erro": str(e)}), 400
 
-    return jsonify(calcular(item, quantidade, renda, carga, parcela))
+    return jsonify(calcular(item, quantidade, renda, carga, parcela, base))
 
 
 @app.get("/api/cenarios")
@@ -194,7 +228,8 @@ def rota_cesta():
         renda = _numero(dados.get("renda_mensal"), 0, minimo=0, maximo=10_000_000)
         carga = _numero(dados.get("carga_pct"), PARAMETROS["carga_tributaria_pct"], 0, 100)
         parcela = _numero(dados.get("parcela_saude_pct"), PARAMETROS["parcela_saude_pct"], 0, 100)
-        return jsonify(calcular_cesta(brutos, renda, carga, parcela))
+        base = _base(dados.get("base"))
+        return jsonify(calcular_cesta(brutos, renda, carga, parcela, base))
     except ValueError as e:
         return jsonify({"erro": str(e)}), 400
 

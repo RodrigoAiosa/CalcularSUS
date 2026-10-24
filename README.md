@@ -11,7 +11,10 @@ Na porta o paciente não paga, mas a conta é paga por todos através dos impost
 CalcularSUS/
 ├── api/
 │   ├── index.py      # API Flask (rotas /api/*)
-│   └── dados.py      # itens, categorias, parâmetros e fontes
+│   ├── dados.py          # itens, categorias, cenários, parâmetros e fontes
+│   └── sigtap_dados.py   # valores oficiais do SIGTAP (gerado pelo script)
+├── scripts/
+│   └── importar_sigtap.py  # importa a Tabela Unificada do SIGTAP
 ├── public/
 │   └── index.html    # interface
 └── requirements.txt
@@ -45,7 +48,7 @@ vercel --prod   # produção
 |------|-----------|
 | `GET /api/itens` | Lista categorias e itens |
 | `GET /api/parametros` | Premissas macro e fontes |
-| `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct` |
+| `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct`, `base` (`estimado` ou `sigtap`) |
 | `GET /api/cenarios` | Cenários prontos (diabetes, gestação, hemodiálise, UTI, alto custo, HIV) |
 | `GET/POST /api/cesta` | Soma vários itens e compara com a contribuição anual |
 
@@ -83,14 +86,44 @@ Premissas macro (conferidas em fontes públicas, ver `api/dados.py`):
 - PLOA 2026: R$ 245,6 bi para saúde na União
 - ~12% dos tributos em saúde: **aproximação derivada**, editável na interface
 
-**Os valores por item (consulta, exames, medicamentos...) são estimativas** e estão
-marcados com `"validado": False`. Antes de divulgar, confira cada um no
-[SIGTAP](https://sigtap.datasus.gov.br) e no [BPS](https://bps.saude.gov.br) e
-troque para `True`, preenchendo o campo `fonte`.
+### Valores oficiais (SIGTAP)
+
+Os valores oficiais vêm da Tabela Unificada do SIGTAP (DATASUS), **competência 10/2026**,
+importados por `scripts/importar_sigtap.py` para `api/sigtap_dados.py` (arquivo gerado).
+Cada item tem dois valores:
+
+- `valor_sigtap`: **repasse federal oficial** por procedimento (`None` = sem valor próprio na tabela).
+- `custo_sus`: custo de referência para o sistema. É igual ao valor oficial nos itens
+  `validado: true` (exames e hemodiálise) e uma **estimativa** nos demais.
+
+A interface tem o seletor **Base dos valores**: "Custo estimado" (padrão) ou "Tabela SIGTAP".
+Na API, use `base=estimado` ou `base=sigtap` em `/api/calcular` e `/api/cesta`.
+Itens sem valor na base escolhida entram como R$ 0,00 e a resposta lista `itens_sem_valor`.
+
+**Importante:** o SIGTAP é o repasse federal, não o custo total. A consulta especializada
+paga R$ 10,00 e a consulta na atenção primária nem tem valor por procedimento (é financiada
+por repasse per capita). Vacinas e medicamentos de uso comum também não constam na tabela.
+
+### Atualizar para uma nova competência
+
+```bash
+# baixe TabelaUnificada_AAAAMM_*.zip em https://sigtap.datasus.gov.br (Download)
+python3 scripts/importar_sigtap.py caminho/TabelaUnificada_AAAAMM_vXXXX.zip
+```
+
+O mapeamento item -> código do procedimento fica em `MAPEAMENTO` no próprio script.
+O zip desta competência foi obtido de um espelho público do FTP do DATASUS
+([RenatoKR/SIGTAP](https://github.com/RenatoKR/SIGTAP)); confira os valores no site oficial antes de divulgar.
+
+### O que ainda falta validar
+
+Medicamentos (`losartana`, `metformina`, `insulina_nph`, `omeprazol`, `salbutamol`,
+`antirretroviral`, `alto_custo`), vacina e o custo real de consulta básica, odontologia,
+SAMU e UPA: usar o [BPS](https://bps.saude.gov.br) e a CMED, ou dados do SIOPS/estados.
 
 ## Ideias para evoluir
 
-- Importar a tabela SIGTAP inteira (CSV do DATASUS) em vez de itens manuais
-- Separar "valor de repasse do SUS" de "custo real" por item
+- Importar a tabela SIGTAP inteira e permitir escolher qualquer procedimento
+- Preços de medicamentos pelo BPS (compras públicas)
 - Comparar por estado/município (SIOPS)
 - Compartilhar resultado como imagem

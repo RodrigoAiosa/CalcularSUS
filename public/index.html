@@ -117,7 +117,15 @@
         <label for="renda">Sua renda mensal (R$)</label>
         <input id="renda" type="number" min="0" step="100" placeholder="ex.: 3000" inputmode="decimal">
       </div>
+      <div>
+        <label for="base">Base dos valores</label>
+        <select id="base">
+          <option value="estimado">Custo estimado para o sistema</option>
+          <option value="sigtap">Tabela SIGTAP (repasse federal oficial)</option>
+        </select>
+      </div>
     </div>
+    <p class="hint" id="base-dica"></p>
     <details>
       <summary>Ajustar premissas</summary>
       <div class="grid" style="margin-top:12px">
@@ -154,7 +162,7 @@
       <div id="cesta-res" aria-live="polite" style="margin-top:12px">
         <div class="stats">
           <div class="stat zero"><small>Você pagou na hora</small><b>R$ 0,00</b></div>
-          <div class="stat cost"><small>Custo do consumo no ano</small><b id="c-custo"></b></div>
+          <div class="stat cost"><small id="c-custo-l">Custo do consumo no ano</small><b id="c-custo"></b></div>
           <div class="stat"><small id="c-part-l">No particular custaria</small><b id="c-part"></b></div>
         </div>
         <div id="c-renda" hidden>
@@ -169,6 +177,7 @@
           </div>
         </div>
         <p class="punch" id="c-punch"></p>
+        <p class="aviso" id="c-aviso" hidden style="margin-top:12px"></p>
       </div>
     </div>
     <p class="err" id="c-err" hidden></p>
@@ -199,10 +208,11 @@
       </div>
       <div class="stats">
         <div class="stat zero"><small>Você pagou na hora</small><b id="r-zero">R$ 0,00</b></div>
-        <div class="stat cost"><small>Custo real para o sistema</small><b id="r-custo"></b></div>
+        <div class="stat cost"><small id="r-custo-l">Custo para o sistema</small><b id="r-custo"></b></div>
         <div class="stat"><small>No particular custaria</small><b id="r-part"></b></div>
       </div>
       <p class="punch" id="r-punch"></p>
+      <p class="hint" id="r-fonte"></p>
       <div id="r-renda" hidden>
         <div class="chart">
           <h3>Sua contribuição para a saúde x custo deste uso (por ano)</h3>
@@ -223,7 +233,7 @@
     </div>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Item</th><th class="num">Custo (SUS)</th><th class="num">Particular</th><th>Status</th></tr></thead>
+        <thead><tr><th>Item</th><th class="num">Custo estimado</th><th class="num">Tabela SIGTAP</th><th class="num">Particular</th><th>Status</th></tr></thead>
         <tbody id="tbody"></tbody>
       </table>
     </div>
@@ -231,9 +241,10 @@
 
   <section class="card">
     <h2>Metodologia e fontes</h2>
-    <p>O custo por item é o valor de referência para o sistema público; o "particular" é o preço aproximado de mercado. A parte da sua renda que vira saúde é: <em>renda anual × carga tributária × % aplicado em saúde</em>. É uma estimativa educativa, não um extrato do que você realmente pagou.</p>
+    <p><b>Duas bases de valor.</b> A <em>Tabela SIGTAP</em> (DATASUS) traz o valor que o Ministério da Saúde repassa por procedimento; é oficial, mas é um piso, porque estados e municípios complementam e muitos serviços (atenção primária, SAMU, vacinas, medicamentos) não têm valor por procedimento na tabela. O <em>custo estimado</em> é uma referência do custo real para o sistema: onde há valor oficial equivalente ele é usado, nos demais casos é estimativa. O "particular" é o preço aproximado de mercado.</p>
+    <p>A parte da sua renda que vira saúde é: <em>renda anual × carga tributária × % aplicado em saúde</em>. É uma estimativa educativa, não um extrato do que você realmente pagou.</p>
     <p>O SUS funciona como um fundo coletivo: todos contribuem e cada um usa conforme a necessidade. Por isso é normal que, em um ano com doença grave, o custo supere em muito o que a pessoa contribuiu, e que em anos sem uso aconteça o contrário.</p>
-    <p class="aviso"><b>Atenção:</b> os valores por item ainda são estimativas e precisam ser validados no SIGTAP e no Banco de Preços em Saúde antes de uso público. As quantidades dos cenários são exemplos didáticos, não protocolos clínicos.</p>
+    <p class="aviso"><b>Atenção:</b> os itens marcados como "estimativa" ainda não têm valor oficial correspondente e devem ser validados (medicamentos no Banco de Preços em Saúde). As quantidades dos cenários são exemplos didáticos, não protocolos clínicos.</p>
     <ul class="fontes" id="fontes"></ul>
   </section>
 
@@ -272,7 +283,20 @@ function dados() {
     renda_mensal: $("renda").value || "0",
     carga_pct: $("carga").value,
     parcela_saude_pct: $("parcela").value,
+    base: $("base").value,
   };
+}
+
+let SIGTAP_COMP = "";
+const rotuloCusto = () => $("base").value === "sigtap" ? "Valor da tabela SIGTAP (repasse)" : "Custo estimado para o sistema";
+function semValorTitulo(i) {
+  if (i.sigtap) return "Existe na tabela SIGTAP, mas sem valor próprio (financiado por repasse global)";
+  return i.categoria === "medicamentos" ? "Medicamentos não constam no SIGTAP (veja BPS/CMED)" : "Sem procedimento equivalente no SIGTAP";
+}
+function dicaBase() {
+  $("base-dica").textContent = $("base").value === "sigtap"
+    ? `Valores do repasse federal por procedimento (SIGTAP, competência ${SIGTAP_COMP}). É um piso: estados e municípios complementam, e itens sem valor na tabela entram como R$ 0,00.`
+    : "Custo estimado para o sistema (referência). Onde existe valor oficial no SIGTAP, ele é usado; nos demais casos é uma estimativa.";
 }
 
 /* Gráfico de duas barras: contribuição x custo */
@@ -316,9 +340,12 @@ function desenharTabela() {
     <tr class="click" data-id="${i.id}">
       <td>${i.nome}<br><small style="color:var(--muted)">por ${i.unidade}</small></td>
       <td class="num">${brl.format(i.custo_sus)}</td>
+      <td class="num">${i.valor_sigtap == null
+        ? `<span title="${semValorTitulo(i)}">sem valor</span>`
+        : `${brl.format(i.valor_sigtap)}<br><small style="color:var(--muted)">${i.sigtap.codigo_fmt}</small>`}</td>
       <td class="num">${i.valor_particular == null ? "-" : brl.format(i.valor_particular)}</td>
-      <td><span class="badge ${i.validado ? "ok" : ""}">${i.validado ? "validado" : "estimativa"}</span></td>
-    </tr>`).join("") || '<tr><td colspan="4">Nenhum item encontrado.</td></tr>';
+      <td><span class="badge ${i.validado ? "ok" : ""}">${i.validado ? "oficial (SIGTAP)" : "estimativa"}</span></td>
+    </tr>`).join("") || '<tr><td colspan="5">Nenhum item encontrado.</td></tr>';
 }
 
 /* ---------- calculadora de um item ---------- */
@@ -352,19 +379,25 @@ function mostrarItem(r) {
   $("resultado").hidden = false;
   $("r-nome").textContent = `${num.format(r.quantidade)} ${rotulo(it.unidade, r.quantidade)} de ${it.nome}`;
   const b = $("r-badge");
-  b.textContent = it.validado ? "valor validado" : "valor estimado";
-  b.className = "badge " + (it.validado ? "ok" : "");
+  const oficial = it.validado || (r.base === "sigtap" && !r.sem_valor_base);
+  b.textContent = oficial ? "valor oficial (SIGTAP)" : "valor estimado";
+  b.className = "badge " + (oficial ? "ok" : "");
 
   $("r-zero").textContent = brl.format(r.pago_na_hora);
-  $("r-custo").textContent = brl.format(r.custo_total);
+  $("r-custo-l").textContent = rotuloCusto();
+  $("r-custo").textContent = r.sem_valor_base ? "sem valor" : brl.format(r.custo_total);
+  $("r-fonte").textContent = "Fonte: " + it.fonte;
   $("r-part").textContent = r.valor_particular_total == null ? "não vendido" : brl.format(r.valor_particular_total);
 
   let punch = `Na porta o preço é zero, mas o sistema gasta cerca de <b>${brl.format(r.custo_total)}</b>. Quem paga é a sociedade, via impostos.`;
   if (r.diferenca_particular != null && r.diferenca_particular > 0)
     punch += ` No particular você pagaria <b>${brl.format(r.diferenca_particular)}</b> a mais.`;
+  if (r.sem_valor_base) {
+    punch = `Este item <b>não tem valor próprio na tabela SIGTAP</b> (${semValorTitulo(it)}). Para ver uma estimativa, mude a "Base dos valores" para "Custo estimado".`;
+  }
   $("r-punch").innerHTML = punch;
 
-  const temRenda = r.renda_anual > 0;
+  const temRenda = r.renda_anual > 0 && !r.sem_valor_base;
   $("r-renda").hidden = !temRenda;
   if (temRenda) {
     barras($("r-bars"), r.imposto_saude_anual, r.custo_total);
@@ -429,13 +462,21 @@ function desenharLinhasCesta(r) {
       <td>${l.nome}<br><small style="color:var(--muted)">${rotulo(l.unidade, l.quantidade)}</small></td>
       <td><input class="qtd-in" type="number" min="1" step="1" ${l.max_por_ano ? `max="${l.max_por_ano}"` : ""}
                  value="${l.quantidade}" data-i="${i}" aria-label="Quantidade de ${l.nome}"></td>
-      <td class="num">${brl.format(l.custo)}</td>
+      <td class="num">${l.sem_valor_base ? "sem valor" : brl.format(l.custo)}</td>
       <td><button class="link" type="button" data-rm="${i}" aria-label="Remover ${l.nome}">remover</button></td>
     </tr>`).join("");
 }
 
 function mostrarTotaisCesta(r) {
+  $("c-custo-l").textContent = r.base === "sigtap" ? "Valor da cesta na tabela SIGTAP" : "Custo estimado do consumo no ano";
   $("c-custo").textContent = brl.format(r.custo_total);
+  const av = $("c-aviso");
+  if (r.itens_sem_valor && r.itens_sem_valor.length) {
+    av.hidden = false;
+    av.innerHTML = `<b>Atenção:</b> ${r.itens_sem_valor.length} item(ns) sem valor na tabela SIGTAP entraram como R$ 0,00 (${r.itens_sem_valor.join("; ")}). O total <b>subestima</b> o custo real; mude a base para "Custo estimado" para incluí-los.`;
+  } else {
+    av.hidden = true;
+  }
   if (r.particular_completo) {
     $("c-part-l").textContent = "No particular custaria";
     $("c-part").textContent = brl.format(r.valor_particular_total);
@@ -455,13 +496,20 @@ function mostrarTotaisCesta(r) {
   barras($("c-bars"), r.imposto_saude_anual, r.custo_total);
   $("c-contrib").textContent = brl.format(r.imposto_saude_anual);
   const falta = r.saldo < 0;
-  $("c-saldo-l").textContent = falta ? "Custo acima da sua contribuição" : "Sobra da sua contribuição";
+  const incompleta = r.itens_sem_valor && r.itens_sem_valor.length > 0;
+  $("c-saldo-l").textContent = falta
+    ? (incompleta ? "Custo acima da sua contribuição (no mínimo)" : "Custo acima da sua contribuição")
+    : (incompleta ? "Sobra aparente (itens sem valor ficaram de fora)" : "Sobra da sua contribuição");
   $("c-saldo").textContent = brl.format(Math.abs(r.saldo));
   $("c-anos").textContent = r.anos_para_cobrir > 1 ? `${num.format(r.anos_para_cobrir)} anos` : "menos de 1 ano";
 
+  const parcial = incompleta;
   if (falta) {
     punch.className = "punch alert";
-    punch.innerHTML = `Esse consumo custa <b>${num.format(r.vezes_a_contribuicao)}x</b> o que a sua renda destina à saúde por ano. A diferença de <b>${brl.format(-r.saldo)}</b> é financiada por outros contribuintes: é assim que o SUS funciona como um fundo coletivo.`;
+    punch.innerHTML = `${parcial ? "Mesmo sem contar os itens sem valor na tabela, e" : "E"}sse consumo custa ${parcial ? "ao menos " : ""}<b>${num.format(r.vezes_a_contribuicao)}x</b> o que a sua renda destina à saúde por ano. A diferença de <b>${brl.format(-r.saldo)}</b> é financiada por outros contribuintes: é assim que o SUS funciona como um fundo coletivo.`;
+  } else if (parcial) {
+    punch.className = "punch";
+    punch.innerHTML = `Com os itens que têm valor na tabela SIGTAP, a sua contribuição estimada cobriria o consumo, mas <b>${r.itens_sem_valor.length} item(ns) ficaram de fora</b>, então este resultado <b>não é conclusivo</b>. Veja o aviso abaixo.`;
   } else {
     punch.className = "punch";
     punch.innerHTML = `Neste cenário a sua contribuição estimada cobre todo o consumo e ainda sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas.`;
@@ -474,11 +522,14 @@ async function init() {
   ITENS = lista.itens; CATS = lista.categorias; CENARIOS = cen.cenarios;
   $("carga").value = par.parametros.carga_tributaria_pct;
   $("parcela").value = par.parametros.parcela_saude_pct;
+  SIGTAP_COMP = par.sigtap_competencia;
+  dicaBase();
   $("fontes").innerHTML = par.fontes.map((f) => `<li><a href="${f.url}" target="_blank" rel="noopener">${f.titulo}</a></li>`).join("");
   preencherSelect(); desenharChips(); desenharTabela(); ajustarCampoQtd(); calcularItem();
 
   const reagir = () => { clearTimeout(timerItem); timerItem = setTimeout(calcularItem, 250); agendarCesta(); };
   ["renda", "carga", "parcela"].forEach((id) => $(id).addEventListener("input", reagir));
+  $("base").addEventListener("change", () => { dicaBase(); reagir(); });
   $("qtd").addEventListener("input", () => {
     const max = Number($("qtd").max);
     if (max && Number($("qtd").value) > max) $("qtd").value = max;   // nunca passa do limite anual
@@ -509,7 +560,7 @@ async function init() {
       try {
         const r = await api("/api/cesta", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ itens: cesta, ...dados() }) });
         // atualiza só custos e totais, sem recriar o campo em edição
-        r.linhas.forEach((ln, i) => { const td = $("cesta-body").rows[i]?.cells[2]; if (td) td.textContent = brl.format(ln.custo); });
+        r.linhas.forEach((ln, i) => { const td = $("cesta-body").rows[i]?.cells[2]; if (td) td.textContent = ln.sem_valor_base ? "sem valor" : brl.format(ln.custo); });
         mostrarTotaisCesta(r);
       } catch (er) { $("c-err").textContent = er.message; $("c-err").hidden = false; }
     }, 250);

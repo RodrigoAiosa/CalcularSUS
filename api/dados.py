@@ -1,13 +1,18 @@
 """Dados do CalcularSUS.
 
-ATENÇÃO: os valores por item (custo_sus / valor_particular) são ESTIMATIVAS
-de referência e ainda precisam ser validados contra as fontes oficiais:
-  - SIGTAP (tabela de procedimentos do SUS): https://sigtap.datasus.gov.br
-  - BPS - Banco de Preços em Saúde (medicamentos): https://bps.saude.gov.br
-  - CMED (preço máximo de medicamentos): https://www.gov.br/anvisa
+Como os valores são tratados
+----------------------------
+- custo_sus: custo de referência do item para o sistema (estimativa). Quando o
+  SIGTAP traz um valor equivalente e ele é igual ao custo_sus, o item fica
+  "validado" (valor oficial).
+- valor_sigtap: repasse federal oficial da Tabela SIGTAP (api/sigtap_dados.py,
+  gerado por scripts/importar_sigtap.py). None = sem valor próprio na tabela.
+- valor_particular: preço aproximado de mercado (estimativa).
 
-Ao validar um item, troque "validado": False por True e preencha "fonte".
-Os PARÂMETROS macro abaixo foram conferidos em reportagens/fontes públicas.
+O SIGTAP não cobre medicamentos de uso comum, vacinas nem atenção primária por
+procedimento; para esses itens, validar no BPS (https://bps.saude.gov.br) e na
+CMED (https://www.gov.br/anvisa). Os PARÂMETROS macro abaixo foram conferidos em
+reportagens/fontes públicas.
 """
 
 # --------------------------------------------------------------------------
@@ -43,7 +48,7 @@ FONTES = [
         "url": "https://medicinasa.com.br/?p=143004",
     },
     {
-        "titulo": "SIGTAP - Tabela de Procedimentos do SUS (para validar os itens)",
+        "titulo": "SIGTAP - Tabela de Procedimentos do SUS (DATASUS), competência 10/2026",
         "url": "https://sigtap.datasus.gov.br",
     },
     {
@@ -63,8 +68,6 @@ CATEGORIAS = {
     "procedimentos": "Procedimentos e internações",
     "medicamentos": "Medicamentos (tratamento de 1 mês)",
 }
-
-_FONTE_PADRAO = "Estimativa de referência - validar no SIGTAP/BPS"
 
 ITENS = [
     # ---------------- Atendimentos ----------------
@@ -95,13 +98,13 @@ ITENS = [
      "nome": "Raio-X de tórax", "unidade": "exame",
      "custo_sus": 9.50, "valor_particular": 100.00},
     {"id": "ultrassom", "categoria": "exames",
-     "nome": "Ultrassonografia", "unidade": "exame",
+     "nome": "Ultrassonografia obstétrica", "unidade": "exame",
      "custo_sus": 24.20, "valor_particular": 150.00},
     {"id": "tomografia", "categoria": "exames",
-     "nome": "Tomografia computadorizada", "unidade": "exame",
+     "nome": "Tomografia computadorizada (abdômen)", "unidade": "exame",
      "custo_sus": 138.63, "valor_particular": 700.00},
     {"id": "ressonancia", "categoria": "exames",
-     "nome": "Ressonância magnética", "unidade": "exame",
+     "nome": "Ressonância magnética (crânio)", "unidade": "exame",
      "custo_sus": 268.75, "valor_particular": 1500.00},
 
     # ---------------- Procedimentos / internações ----------------
@@ -112,11 +115,11 @@ ITENS = [
      "nome": "Parto cesáreo (com internação)", "unidade": "parto",
      "custo_sus": 2000.00, "valor_particular": 15000.00},
     {"id": "uti_diaria", "categoria": "procedimentos",
-     "nome": "Diária de UTI adulto", "unidade": "diária",
+     "nome": "Diária de UTI adulto (tipo II)", "unidade": "diária",
      "custo_sus": 2500.00, "valor_particular": 7000.00},
     {"id": "hemodialise", "categoria": "procedimentos",
      "nome": "Sessão de hemodiálise", "unidade": "sessão",
-     "custo_sus": 250.00, "valor_particular": 600.00},
+     "custo_sus": 251.57, "valor_particular": 600.00},
     {"id": "catarata", "categoria": "procedimentos",
      "nome": "Cirurgia de catarata", "unidade": "cirurgia",
      "custo_sus": 900.00, "valor_particular": 5000.00},
@@ -145,12 +148,42 @@ ITENS = [
      "custo_sus": 3500.00, "valor_particular": 6000.00},
 ]
 
+from sigtap_dados import COMPETENCIA_FMT, PROCEDIMENTOS  # noqa: E402  (gerado por scripts/importar_sigtap.py)
+
+SIGTAP_COMPETENCIA = COMPETENCIA_FMT
+
 for _i in ITENS:
-    _i.setdefault("validado", False)
-    _i.setdefault("fonte", _FONTE_PADRAO)
     # Itens cobrados por mês só podem ser usados até 12 meses por ano.
     if _i["unidade"] == "mês":
         _i["max_por_ano"] = 12
+
+    # Valor oficial da Tabela SIGTAP (repasse federal). Valor 0 = procedimento
+    # existe, mas não tem valor próprio (ex.: atenção primária, SAMU).
+    _sig = PROCEDIMENTOS.get(_i["id"])
+    _i["sigtap"] = _sig
+    _i["valor_sigtap"] = _sig["valor"] if _sig and _sig["valor"] > 0 else None
+
+    # "validado" = o custo usado é exatamente o valor oficial do SIGTAP.
+    _i["validado"] = (
+        _i["valor_sigtap"] is not None and abs(_i["custo_sus"] - _i["valor_sigtap"]) < 0.005
+    )
+    if _i["validado"]:
+        _i["fonte"] = f"SIGTAP {_sig['codigo_fmt']} - competência {SIGTAP_COMPETENCIA}"
+    elif _i["valor_sigtap"] is not None:
+        _vl = f"{_i['valor_sigtap']:.2f}".replace(".", ",")
+        _i["fonte"] = (
+            f"Custo real: estimativa. Repasse oficial SIGTAP {_sig['codigo_fmt']}: "
+            f"R$ {_vl} (competência {SIGTAP_COMPETENCIA})"
+        )
+    elif _sig is not None:
+        _i["fonte"] = (
+            f"Estimativa. Procedimento SIGTAP {_sig['codigo_fmt']} existe, mas sem valor próprio "
+            "(financiado por repasse global)"
+        )
+    elif _i["categoria"] == "medicamentos":
+        _i["fonte"] = "Estimativa. Medicamentos não constam no SIGTAP; validar no BPS/CMED"
+    else:
+        _i["fonte"] = "Estimativa. Sem procedimento equivalente no SIGTAP"
 
 # --------------------------------------------------------------------------
 # Cenários prontos: combinações ilustrativas de consumo em 1 ano.
