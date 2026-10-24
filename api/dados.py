@@ -222,6 +222,16 @@ for _i in ITENS:
 # --------------------------------------------------------------------------
 CENARIOS = [
     {
+        "id": "uso_leve",
+        "nome": "Uso leve no ano",
+        "descricao": "Dois atendimentos de cada tipo: consulta com especialista, dentista e UPA.",
+        "itens": [
+            {"item_id": "consulta_especialista", "quantidade": 2},
+            {"item_id": "consulta_odonto", "quantidade": 2},
+            {"item_id": "upa", "quantidade": 2},
+        ],
+    },
+    {
         "id": "diabetico",
         "nome": "Pessoa com diabetes",
         "descricao": "Acompanhamento regular: consultas, exames de sangue, metformina e insulina.",

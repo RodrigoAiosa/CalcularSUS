@@ -173,8 +173,9 @@
           <div class="stats" style="margin-top:12px">
             <div class="stat"><small>Parte dos seus impostos que vai para a saúde</small><b id="c-contrib"></b></div>
             <div class="stat"><small id="c-saldo-l">Diferença</small><b id="c-saldo"></b></div>
-            <div class="stat"><small>Anos de contribuição para cobrir sozinho</small><b id="c-anos"></b></div>
+            <div class="stat"><small id="c-anos-l">Anos de contribuição para cobrir sozinho</small><b id="c-anos"></b></div>
           </div>
+          <p class="hint" id="c-equilibrio"></p>
         </div>
         <p class="punch" id="c-punch"></p>
         <p class="aviso" id="c-aviso" hidden style="margin-top:12px"></p>
@@ -511,7 +512,24 @@ function mostrarTotaisCesta(r) {
     ? (incompleta ? "Custo acima da sua contribuição (no mínimo)" : "Custo acima da sua contribuição")
     : (incompleta ? "Sobra aparente (itens sem valor ficaram de fora)" : "Sobra da sua contribuição");
   $("c-saldo").textContent = brl.format(Math.abs(r.saldo));
-  $("c-anos").textContent = r.anos_para_cobrir > 1 ? `${num.format(r.anos_para_cobrir)} anos` : "menos de 1 ano";
+  const vezes = r.cobertura_pct != null ? r.cobertura_pct / 100 : null;   // quantas vezes a contribuição cobre o uso
+  if (falta) {
+    $("c-anos-l").textContent = "Anos de contribuição para cobrir sozinho";
+    $("c-anos").textContent = r.anos_para_cobrir > 1 ? `${num.format(r.anos_para_cobrir)} anos` : "menos de 1 ano";
+  } else if (incompleta) {
+    $("c-anos-l").textContent = "Contribuição / uso (parcial)";
+    $("c-anos").textContent = "não conclusivo";
+  } else {
+    $("c-anos-l").textContent = "Sua contribuição cobre este uso";
+    $("c-anos").textContent = `${num.format(vezes)}x`;
+  }
+  const eq = $("c-equilibrio");
+  if (r.renda_equilibrio_mensal && !incompleta) {
+    eq.hidden = false;
+    eq.textContent = `Renda mensal em que a contribuição para a saúde iguala este consumo: ${brl.format(r.renda_equilibrio_mensal)} (com as premissas atuais). Acima disso, a pessoa contribui mais do que usa neste cenário.`;
+  } else {
+    eq.hidden = true;
+  }
 
   const parcial = incompleta;
   if (falta) {
@@ -522,7 +540,7 @@ function mostrarTotaisCesta(r) {
     punch.innerHTML = `Com os itens que têm valor na tabela SIGTAP, a sua contribuição estimada cobriria o consumo, mas <b>${r.itens_sem_valor.length} item(ns) ficaram de fora</b>, então este resultado <b>não é conclusivo</b>. Veja o aviso abaixo.`;
   } else {
     punch.className = "punch";
-    punch.innerHTML = `Neste cenário a sua contribuição estimada cobre todo o consumo e ainda sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas.`;
+    punch.innerHTML = `Neste cenário a sua contribuição estimada para a saúde (<b>${brl.format(r.imposto_saude_anual)}</b>) é <b>${num.format(vezes)}x</b> o custo do que você usou (<b>${brl.format(r.custo_total)}</b>). Sobram <b>${brl.format(r.saldo)}</b>, que ajudam a financiar o atendimento de outras pessoas, como quem precisa de tratamentos caros.`;
   }
 }
 

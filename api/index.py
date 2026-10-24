@@ -62,6 +62,14 @@ def _contribuicao(renda_mensal, carga_pct, parcela_saude_pct):
     return renda_anual, impostos_anuais, imposto_saude_anual
 
 
+def _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct):
+    """Renda mensal em que a contribuição para a saúde iguala o custo informado."""
+    fator = 12 * (carga_pct / 100) * (parcela_saude_pct / 100)
+    if fator <= 0 or custo_total <= 0:
+        return None
+    return round(custo_total / fator, 2)
+
+
 def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="estimado"):
     """Soma o consumo de vários itens e compara com a contribuição anual."""
     linhas = []
@@ -113,6 +121,7 @@ def calcular_cesta(linhas_in, renda_mensal, carga_pct, parcela_saude_pct, base="
         "tem_renda": tem_renda,
         # saldo > 0: contribuição cobre o consumo; saldo < 0: outros contribuintes cobrem a diferença
         "saldo": round(saldo, 2),
+        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct),
         "cobertura_pct": round(imposto_saude / custo_total * 100, 1) if custo_total and tem_renda else None,
         "vezes_a_contribuicao": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
         "anos_para_cobrir": round(custo_total / imposto_saude, 1) if tem_renda and custo_total else None,
@@ -150,6 +159,7 @@ def calcular(item, quantidade, renda_mensal, carga_pct, parcela_saude_pct, base=
         "renda_anual": round(renda_anual, 2),
         "impostos_anuais": round(impostos_anuais, 2),
         "imposto_saude_anual": round(imposto_saude_anual, 2),
+        "renda_equilibrio_mensal": _renda_equilibrio(custo_total, carga_pct, parcela_saude_pct),
         "unidades_cobertas_por_ano": round(unidades_cobertas, 2) if unidades_cobertas is not None else None,
         "cobertura_pct": round(cobertura_pct, 1) if cobertura_pct is not None else None,
         "premissas": {"carga_pct": carga_pct, "parcela_saude_pct": parcela_saude_pct},

@@ -51,7 +51,7 @@ vercel --prod   # produção
 | `GET /api/itens` | Lista categorias e itens |
 | `GET /api/parametros` | Premissas macro e fontes |
 | `GET/POST /api/calcular` | Calcula um item. Parâmetros: `item_id`, `quantidade`, `renda_mensal`, `carga_pct`, `parcela_saude_pct`, `base` (`estimado` ou `sigtap`) |
-| `GET /api/cenarios` | Cenários prontos (diabetes, gestação, hemodiálise, UTI, alto custo, HIV) |
+| `GET /api/cenarios` | Cenários prontos (uso leve, diabetes, gestação, hemodiálise, UTI, alto custo, HIV) |
 | `GET/POST /api/cesta` | Soma vários itens e compara com a contribuição anual |
 
 Exemplos:
@@ -79,6 +79,10 @@ Os cenários ficam em `api/dados.py` (`CENARIOS`) e são exemplos didáticos, n�
 - **Impostos que você paga por ano** = renda mensal × 12 × carga tributária
 - **Parte que vai para a saúde** = impostos × % aplicado em saúde
 - **Cobertura** = parte da saúde ÷ custo total do uso
+- **Renda de equilíbrio** (`renda_equilibrio_mensal`) = custo do uso ÷ (12 × carga tributária × % para saúde):
+  a renda mensal em que a contribuição para a saúde iguala o consumo. Com as premissas
+  padrão, o cenário "Uso leve" (2 consultas com especialista, 2 de dentista e 2 na UPA, custo de
+  R$ 1.160) tem equilíbrio em ~R$ 2.486 de renda mensal; abaixo disso o uso supera a contribuição.
 
 ## Dados: o que já está validado e o que falta
 
